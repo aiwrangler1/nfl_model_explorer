@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional
 from .config import OPPONENT_STRENGTH_SETTINGS
+import logging
 
 class OpponentStrengthAdjuster:
     def __init__(self, settings: Optional[Dict] = None):
@@ -116,55 +117,103 @@ class OpponentStrengthAdjuster:
         offensive_edp: pd.DataFrame,
         defensive_edp: pd.DataFrame
     ) -> Dict[str, pd.Series]:
+        """Calculate opponent-adjusted metrics."""
+        try:
+            # Create combined dataframe for calculations
+            combined_df = pd.merge(
+                offensive_edp,
+                defensive_edp,
+                on=['team', 'game_id', 'season', 'week'],
+                suffixes=('_off', '_def')
+            )
+            
+            # Calculate league averages
+            league_avg_off = combined_df['offensive_edp'].mean()
+            league_avg_def = combined_df['defensive_edp'].mean()
+            
+            # Initialize dictionaries for adjusted values
+            adjusted_offensive = {}
+            adjusted_defensive = {}
+            
+            # Calculate opponent strength for each team
+            opponent_strength = self._calculate_opponent_strength(combined_df)
+            
+            # Calculate adjustments
+            for team in combined_df['team'].unique():
+                team_data = combined_df[combined_df['team'] == team]
+                if len(team_data) > 0:
+                    # Offensive adjustment
+                    raw_off_edp = team_data['offensive_edp'].mean()
+                    opp_def_strength = opponent_strength.get(team, {}).get('defensive', league_avg_def)
+                    adjusted_offensive[team] = raw_off_edp + (league_avg_def - opp_def_strength)
+                    
+                    # Defensive adjustment
+                    raw_def_edp = team_data['defensive_edp'].mean()
+                    opp_off_strength = opponent_strength.get(team, {}).get('offensive', league_avg_off)
+                    adjusted_defensive[team] = raw_def_edp + (league_avg_off - opp_off_strength)
+            
+            # Fill any missing teams with league averages
+            all_teams = set(offensive_edp['team'].unique()) | set(defensive_edp['team'].unique())
+            for team in all_teams:
+                if team not in adjusted_offensive:
+                    adjusted_offensive[team] = league_avg_off
+                if team not in adjusted_defensive:
+                    adjusted_defensive[team] = league_avg_def
+            
+            logging.info(f"Adjusted metrics calculated for {len(adjusted_offensive)} teams")
+            return {
+                'offensive': adjusted_offensive,
+                'defensive': adjusted_defensive
+            }
+            
+        except Exception as e:
+            logging.error(f"Error calculating adjusted metrics: {str(e)}")
+            raise 
+    
+    def _calculate_opponent_strength(self, combined_df: pd.DataFrame) -> Dict[str, Dict[str, float]]:
         """
-        Calculate opponent-adjusted EDP metrics.
+        Calculate opponent strength metrics for each team.
         
         Args:
-            offensive_edp: DataFrame with offensive EDP metrics
-            defensive_edp: DataFrame with defensive EDP metrics
-            
+            combined_df: DataFrame with offensive and defensive metrics
+        
         Returns:
-            Dictionary with adjusted offensive and defensive metrics
+            Dictionary mapping teams to their opponent strength metrics
         """
-        # Combine metrics
-        combined_df = pd.merge(
-            offensive_edp,
-            defensive_edp,
-            on=['team', 'game_id'],
-            how='outer',
-            validate='1:1'
-        )
+        opponent_strength = {}
         
-        # Calculate opponent strength metrics
-        opponent_strength = self.calculate_opponent_strength_metrics(
-            combined_df,
-            metrics=self.settings['metrics'],
-            window=self.settings['window']
-        )
-        
-        # Calculate matchup adjustments
-        matchup_adjustments = self.calculate_matchup_adjustments(
-            combined_df[['offensive_edp', 'defensive_edp']],
-            opponent_strength,
-            weights=self.settings['weights']
-        )
-        
-        # Apply adjustments
-        adjusted_offensive = self.apply_opponent_adjustments(
-            combined_df,
-            'offensive_edp',
-            opponent_strength,
-            matchup_adjustments
-        )
-        
-        adjusted_defensive = self.apply_opponent_adjustments(
-            combined_df,
-            'defensive_edp',
-            opponent_strength,
-            matchup_adjustments
-        )
-        
-        return {
-            'offensive': adjusted_offensive,
-            'defensive': adjusted_defensive
-        } 
+        try:
+            # Calculate league averages for reference
+            league_avg_off = combined_df['offensive_edp'].mean()
+            league_avg_def = combined_df['defensive_edp'].mean()
+            
+            # For each team, calculate average opponent metrics
+            for team in combined_df['team'].unique():
+                team_games = combined_df[combined_df['team'] == team]
+                
+                # Get list of opponents
+                opponents = team_games['opponent'].unique() if 'opponent' in team_games.columns else []
+                
+                if len(opponents) > 0:
+                    # Calculate average opponent offensive and defensive metrics
+                    opponent_metrics = combined_df[combined_df['team'].isin(opponents)]
+                    
+                    opponent_strength[team] = {
+                        'offensive': opponent_metrics['offensive_edp'].mean(),
+                        'defensive': opponent_metrics['defensive_edp'].mean()
+                    }
+                else:
+                    # If no opponent data, use league averages
+                    opponent_strength[team] = {
+                        'offensive': league_avg_off,
+                        'defensive': league_avg_def
+                    }
+            
+            logging.info(f"Calculated opponent strength metrics for {len(opponent_strength)} teams")
+            return opponent_strength
+            
+        except Exception as e:
+            logging.error(f"Error calculating opponent strength: {str(e)}")
+            # Return empty dict if calculation fails
+            return {team: {'offensive': league_avg_off, 'defensive': league_avg_def} 
+                    for team in combined_df['team'].unique()}

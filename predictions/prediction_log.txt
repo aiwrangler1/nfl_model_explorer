@@ -74,3 +74,39 @@
 2024-12-07 04:49:57,998 - INFO - Multiprocess sampling (4 chains in 4 jobs)
 2024-12-07 04:49:57,998 - INFO - NUTS: [mu_alpha, sigma_alpha, alpha_raw, beta_edp, beta_def, sigma, nu]
 2024-12-07 04:50:47,201 - ERROR - Error in prediction workflow: Not enough samples to build a trace.
+2024-12-07 05:23:47,244 - INFO - Auto-assigning NUTS sampler...
+2024-12-07 05:23:47,244 - INFO - Initializing NUTS using adapt_diag...
+2024-12-07 05:23:49,447 - INFO - Multiprocess sampling (4 chains in 4 jobs)
+2024-12-07 05:23:49,447 - INFO - NUTS: [mu_alpha, sigma_alpha, alpha_raw, beta_edp, beta_def, sigma, nu]
+2024-12-07 05:24:03,762 - INFO - Sampling 4 chains for 1_000 tune and 2_000 draw iterations (4_000 + 8_000 draws total) took 14 seconds.
+2024-12-07 05:24:04,178 - INFO - Model initialized with historical data and scaler fitted
+2024-12-07 05:24:04,206 - INFO - MatchupAnalyzer initialized for 2024 season
+2024-12-07 05:24:15,327 - INFO - Using 2024 data for 32 teams, 2023 data for 0 teams
+2024-12-07 05:24:15,373 - ERROR - Error analyzing matchup: predict() got an unexpected keyword argument 'nuts_kwargs'
+2024-12-07 05:29:54,265 - INFO - Calculated opponent strength metrics for 32 teams
+2024-12-07 05:29:54,275 - INFO - Adjusted metrics calculated for 32 teams
+2024-12-07 05:29:55,947 - INFO - Auto-assigning NUTS sampler...
+2024-12-07 05:29:55,947 - INFO - Initializing NUTS using adapt_diag...
+2024-12-07 05:29:58,209 - INFO - Multiprocess sampling (4 chains in 4 jobs)
+2024-12-07 05:29:58,209 - INFO - NUTS: [mu_alpha, sigma_alpha, alpha_raw, beta_edp, beta_def, sigma, nu]
+2024-12-07 05:30:13,395 - INFO - Sampling 4 chains for 1_000 tune and 2_000 draw iterations (4_000 + 8_000 draws total) took 15 seconds.
+2024-12-07 05:30:13,905 - INFO - Model initialized with historical data and scaler fitted
+2024-12-07 05:30:13,933 - INFO - MatchupAnalyzer initialized for 2024 season
+2024-12-07 05:30:39,924 - INFO - 
+Raw metrics before adjustments:
+2024-12-07 05:30:39,924 - INFO -   team  offensive_edp  defensive_edp
+0  ARI      73.026475      -2.938020
+1  ATL      74.791050      -3.905032
+2  BAL      86.641230      -1.715906
+3  BUF      81.696932       2.711590
+4  CAR      65.022082      -7.551310
+2024-12-07 05:30:39,936 - INFO - Calculated opponent strength metrics for 32 teams
+2024-12-07 05:30:39,944 - INFO - Adjusted metrics calculated for 32 teams
+2024-12-07 05:30:39,944 - INFO - 
+Adjusted metrics:
+2024-12-07 05:30:39,944 - INFO - ARI: Off=73.03, Def=-2.94
+2024-12-07 05:30:39,944 - INFO - ATL: Off=74.79, Def=-3.91
+2024-12-07 05:30:39,944 - INFO - BAL: Off=86.64, Def=-1.72
+2024-12-07 05:30:39,944 - INFO - BUF: Off=81.70, Def=2.71
+2024-12-07 05:30:39,944 - INFO - CAR: Off=65.02, Def=-7.55
+2024-12-07 05:30:39,949 - INFO - Using 2024 data for 32 teams, 2023 data for 0 teams

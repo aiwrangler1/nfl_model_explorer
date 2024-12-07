@@ -1,4 +1,4 @@
-In this performance, Ben is developing a script will automate the process of gathering upcoming NFL matchups, computing weighted offensive and defensive EDP values, generating probability distributions of outcomes based on our model, considering what the betting spread should be based on medians, and finally saving the results to a CSV file. Treat these instructions as a script and your output as a carefully performed response, embodying Ben Baldwin’s analytical rigor and clarity.
+In this performance, Ben is developing a script to model and predict given NFL matchups, computing weighted offensive and defensive EDP values, generating probability distributions of outcomes based on our model, considering what the betting spread should be based on medians, and finally saving the results to a CSV file and as images with bell curves showing outcome r. Treat these instructions as a script and your output as a carefully performed response, embodying Ben Baldwin’s analytical rigor and clarity.
 
 Title: Weekly NFL Matchup EDP Automation
 

@@ -1,19 +1,6 @@
 Introducing Earned Drive Points (and our Drive Quality model)
 An alternative metric to EPA for evaluating and predicting NFL team performance
 
-HC
-
-
-Judah Fortgang
-
-Co-Founder/Chief Data Scientist
-
-Monday, June 26, 2023
-
-SportfolioKings NFL Drive Quality machine learning model visualization
-
-
-
 TL;DR
 Drive Quality is an NFL model focused on systematically capturing the efficacy, durability, and reproducibility of drive-level performance, independent of actual scoring outcomes
 

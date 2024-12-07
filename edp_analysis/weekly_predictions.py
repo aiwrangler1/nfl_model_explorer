@@ -12,10 +12,36 @@ import numpy as np
 from typing import Dict, Tuple, List
 import logging
 from pathlib import Path
+from sklearn.preprocessing import StandardScaler
+import pickle
 
 from .edp_calculator import EDPCalculator
 from .opponent_strength import OpponentStrengthAdjuster
 from .game_prediction import EDPGamePredictor
+
+# Setup logging configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(Path('predictions/prediction_log.txt')),
+        logging.StreamHandler()
+    ]
+)
+
+VALID_TEAMS = {
+    'ARI', 'ATL', 'BAL', 'BUF', 'CAR', 'CHI', 'CIN', 'CLE',
+    'DAL', 'DEN', 'DET', 'GB', 'HOU', 'IND', 'JAX', 'KC',
+    'LA', 'LAC', 'LV', 'MIA', 'MIN', 'NE', 'NO', 'NYG',
+    'NYJ', 'PHI', 'PIT', 'SEA', 'SF', 'TB', 'TEN', 'WAS'
+}
+
+def validate_team(team: str) -> str:
+    """Validate and normalize team abbreviation."""
+    team = team.upper()
+    if team not in VALID_TEAMS:
+        raise ValueError(f"Invalid team abbreviation: {team}")
+    return team
 
 class MatchupAnalyzer:
     def __init__(self, season: int = 2024):
@@ -25,24 +51,27 @@ class MatchupAnalyzer:
         Args:
             season: NFL season to analyze (default: 2024)
         """
-        self.season = season
-        self.calculator = EDPCalculator()
-        self.adjuster = OpponentStrengthAdjuster()
-        self.predictor = EDPGamePredictor()
-        
-        # EDP weighting parameters
-        self.recent_games_weight = 0.55  # Weight for most recent 3 games
-        self.season_decay = 0.7  # Decay factor between seasons
-        self.game_decay = 0.85  # Decay factor within season
-        
-        # Setup logging
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s'
-        )
-        
-        # Initialize model with historical data
-        self._initialize_model()
+        try:
+            self.season = season
+            self.calculator = EDPCalculator()
+            self.adjuster = OpponentStrengthAdjuster()
+            self.predictor = EDPGamePredictor()
+            
+            # Create predictions directory if it doesn't exist
+            Path('predictions').mkdir(exist_ok=True)
+            
+            # EDP weighting parameters
+            self.recent_games_weight = 0.55  # Weight for most recent 3 games
+            self.season_decay = 0.7  # Decay factor between seasons
+            self.game_decay = 0.85  # Decay factor within season
+            
+            # Initialize model with historical data
+            self._initialize_model()
+            
+            logging.info(f"MatchupAnalyzer initialized for {season} season")
+        except Exception as e:
+            logging.error(f"Error initializing MatchupAnalyzer: {str(e)}")
+            raise
     
     def calculate_weighted_edp(
         self,
@@ -120,6 +149,11 @@ class MatchupAnalyzer:
             df_2024 = self.calculator.load_and_process_data([2024])
             df_2023 = self.calculator.load_and_process_data([2023])
             
+            # Ensure date columns are datetime
+            for df in [df_2024, df_2023]:
+                if 'game_date' in df.columns:
+                    df['game_date'] = pd.to_datetime(df['game_date'])
+            
             # Print unique teams for debugging
             print("\nAvailable teams in 2024:")
             print(sorted(df_2024['posteam'].unique()))
@@ -133,6 +167,31 @@ class MatchupAnalyzer:
             # Combine seasons
             offensive_edp = pd.concat([offensive_edp_2023, offensive_edp_2024])
             defensive_edp = pd.concat([defensive_edp_2023, defensive_edp_2024])
+            
+            # Add opponent information - each game should have exactly two teams
+            for game_id in offensive_edp['game_id'].unique():
+                game_teams = offensive_edp[offensive_edp['game_id'] == game_id]['team'].tolist()
+                assert len(game_teams) == 2, f"Game {game_id} must have exactly 2 teams, found {len(game_teams)}"
+            
+            offensive_edp['opponent'] = offensive_edp.apply(
+                lambda x: defensive_edp[
+                    (defensive_edp['game_id'] == x['game_id']) & 
+                    (defensive_edp['team'] != x['team'])
+                ]['team'].iloc[0],
+                axis=1
+            )
+            
+            defensive_edp['opponent'] = defensive_edp.apply(
+                lambda x: offensive_edp[
+                    (offensive_edp['game_id'] == x['game_id']) & 
+                    (offensive_edp['team'] != x['team'])
+                ]['team'].iloc[0],
+                axis=1
+            )
+            
+            # Verify all games have opponents mapped
+            assert not offensive_edp['opponent'].isna().any(), "Missing opponents in offensive data"
+            assert not defensive_edp['opponent'].isna().any(), "Missing opponents in defensive data"
             
             # Calculate weighted metrics first
             features = []
@@ -155,6 +214,9 @@ class MatchupAnalyzer:
                 # Get most recent game_id
                 latest_game = team_off.sort_values(['season', 'week']).iloc[-1]
                 
+                # Get opponents for this team
+                team_opponents = offensive_edp[offensive_edp['team'] == team]['opponent'].tolist()
+                
                 features.append({
                     'team': team,
                     'game_id': latest_game['game_id'],
@@ -163,23 +225,24 @@ class MatchupAnalyzer:
                     'offensive_edp': weighted_off_edp,
                     'defensive_edp': weighted_def_edp,
                     'games_played_2024': games_2024,
-                    'data_source': '2024' if games_2024 > 0 else '2023'
+                    'data_source': '2024' if games_2024 > 0 else '2023',
+                    'opponents': team_opponents
                 })
             
             features_df = pd.DataFrame(features)
+            logging.info("\nRaw metrics before adjustments:")
+            logging.info(features_df[['team', 'offensive_edp', 'defensive_edp']].head())
             
-            print("\nFeatures before opponent adjustments:")
-            print(features_df[['team', 'offensive_edp', 'defensive_edp']].head())
-            
-            # Now apply opponent adjustments
+            # Apply opponent adjustments
             adjusted_metrics = self.adjuster.calculate_adjusted_metrics(
-                offensive_edp=features_df[['team', 'game_id', 'season', 'week', 'offensive_edp']].rename(columns={'offensive_edp': 'offensive_edp'}),
-                defensive_edp=features_df[['team', 'game_id', 'season', 'week', 'defensive_edp']].rename(columns={'defensive_edp': 'defensive_edp'})
+                offensive_edp=features_df[['team', 'game_id', 'season', 'week', 'offensive_edp']],
+                defensive_edp=features_df[['team', 'game_id', 'season', 'week', 'defensive_edp']]
             )
             
-            print("\nAdjusted metrics:")
-            print("Offensive:", adjusted_metrics['offensive'])
-            print("Defensive:", adjusted_metrics['defensive'])
+            logging.info("\nAdjusted metrics:")
+            for team in sorted(adjusted_metrics['offensive'].keys())[:5]:
+                logging.info(f"{team}: Off={adjusted_metrics['offensive'][team]:.2f}, "
+                            f"Def={adjusted_metrics['defensive'][team]:.2f}")
             
             # Add adjusted metrics back to features
             features_df['adjusted_offensive_edp'] = features_df['team'].map(adjusted_metrics['offensive'])
@@ -230,6 +293,11 @@ class MatchupAnalyzer:
             # Get team-specific metrics
             home_metrics = team_metrics[team_metrics['team'] == home_team].iloc[0]
             away_metrics = team_metrics[team_metrics['team'] == away_team].iloc[0]
+            
+            # Verify we have valid metrics
+            for team, metrics in [(home_team, home_metrics), (away_team, away_metrics)]:
+                if pd.isna(metrics['adjusted_offensive_edp']) or pd.isna(metrics['adjusted_defensive_edp']):
+                    raise ValueError(f"Missing adjusted metrics for {team}")
             
             # Create feature matrix for prediction
             X = pd.DataFrame({
@@ -333,13 +401,44 @@ class MatchupAnalyzer:
             X_train = train_df.drop('point_differential', axis=1)
             y_train = train_df['point_differential'].values
             
+            # Initialize and fit the scaler before model training
+            self.scaler = StandardScaler()
+            X_train_scaled = self.scaler.fit_transform(
+                train_df[['edp_diff', 'def_edp_diff', 'home_edp_uncertainty', 'away_edp_uncertainty']]
+            )
+            
+            # Update X_train with scaled features
+            X_train = pd.DataFrame(
+                X_train_scaled, 
+                columns=['edp_diff', 'def_edp_diff', 'home_edp_uncertainty', 'away_edp_uncertainty']
+            )
+            X_train[['game_id', 'home_team', 'away_team']] = train_df[['game_id', 'home_team', 'away_team']]
+            
             self.predictor.fit_hierarchical_model(X_train, y_train)
             
-            logging.info("Model initialized with historical data")
+            logging.info("Model initialized with historical data and scaler fitted")
             
         except Exception as e:
             logging.error(f"Error initializing model: {str(e)}")
             raise
+    
+    def save_model(self, path: str = 'predictions/model.pkl'):
+        """Save the trained model and scaler."""
+        with open(path, 'wb') as f:
+            pickle.dump({
+                'predictor': self.predictor,
+                'scaler': self.scaler
+            }, f)
+    
+    def load_model(self, path: str = 'predictions/model.pkl'):
+        """Load a trained model and scaler."""
+        if Path(path).exists():
+            with open(path, 'rb') as f:
+                model_data = pickle.load(f)
+                self.predictor = model_data['predictor']
+                self.scaler = model_data['scaler']
+                return True
+        return False
 
 def print_matchup_analysis(analysis: Dict) -> None:
     """Print formatted matchup analysis."""
