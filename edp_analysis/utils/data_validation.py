@@ -48,113 +48,108 @@ class DataValidator:
         """
         null_allowed_columns = null_allowed_columns or []
         validation_results = {
-            'missing_columns': {},
+            'missing_columns': [],
             'null_counts': {},
             'total_rows': len(df)
         }
         
         # Check for missing columns
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            validation_results['missing_columns'] = {col: 0 for col in missing_columns}
-            self.logger.error(f"Missing columns in {dataset_name}: {missing_columns}")
+        missing_cols = [col for col in required_columns if col not in df.columns]
+        validation_results['missing_columns'] = missing_cols
+        
+        if missing_cols:
+            self.logger.warning(f"Missing required columns in {dataset_name}: {missing_cols}")
             return False, validation_results
         
-        # Check null counts
+        # Check for null values
         null_counts = df[required_columns].isnull().sum()
         validation_results['null_counts'] = null_counts.to_dict()
         
-        # Validate null counts for required columns
+        # Determine if dataset is valid based on null counts
         is_valid = True
         for col, null_count in null_counts.items():
             if null_count > 0 and col not in null_allowed_columns:
-                is_valid = False
                 self.logger.warning(
-                    f"Column {col} in {dataset_name} has {null_count} null values "
-                    f"({(null_count/len(df))*100:.1f}% of data)"
+                    f"Column {col} in {dataset_name} has {null_count} null values"
                 )
+                is_valid = False
         
         return is_valid, validation_results
-
+    
     def validate_team_names(
         self,
         df: pd.DataFrame,
         team_columns: List[str]
-    ) -> Tuple[bool, Dict[str, Set[str]]]:
+    ) -> Dict[str, any]:
         """
-        Validate team name consistency in a dataframe.
+        Validate team names in specified columns against known valid teams.
         
         Args:
-            df (pd.DataFrame): The dataframe to validate.
-            team_columns (List[str]): The list of column names containing team names.
+            df (pd.DataFrame): The dataframe containing team names
+            team_columns (List[str]): List of columns containing team names
             
         Returns:
-            Tuple[bool, Dict[str, Set[str]]]: (is_valid, invalid_teams_by_column)
-                invalid_teams_by_column maps column names to sets of invalid team names found
+            Dict containing validation results:
+                - is_valid: bool indicating if all team names are valid
+                - invalid_teams: dict mapping columns to sets of invalid team names
         """
-        is_valid = True
-        invalid_teams_by_column = {}
+        results = {
+            'is_valid': True,
+            'invalid_teams': {}
+        }
         
         for col in team_columns:
             if col not in df.columns:
+                self.logger.warning(f"Team column {col} not found in dataframe")
                 continue
                 
             unique_teams = set(df[col].dropna().unique())
             invalid_teams = unique_teams - self.valid_teams
             
             if invalid_teams:
-                is_valid = False
-                invalid_teams_by_column[col] = invalid_teams
-                self.logger.warning(
-                    f"Found invalid team names in {col}: {invalid_teams}"
-                )
-                
-        return is_valid, invalid_teams_by_column
-
+                results['is_valid'] = False
+                results['invalid_teams'][col] = invalid_teams
+                self.logger.warning(f"Invalid team names found in {col}: {invalid_teams}")
+        
+        return results
+    
     def validate_numerical_ranges(
         self,
         df: pd.DataFrame,
-        range_checks: Dict[str, Tuple[float, float]]
-    ) -> Tuple[bool, Dict[str, Dict[str, int]]]:
+        column_ranges: Dict[str, Tuple[float, float]]
+    ) -> Dict[str, any]:
         """
-        Validate that numerical columns are within expected ranges.
+        Validate that numerical columns fall within expected ranges.
         
         Args:
-            df (pd.DataFrame): The dataframe to validate.
-            range_checks (Dict[str, Tuple[float, float]]): A dictionary mapping column names to (min, max) tuples.
+            df (pd.DataFrame): The dataframe to validate
+            column_ranges (Dict[str, Tuple[float, float]]): Dict mapping column names to (min, max) ranges
             
         Returns:
-            Tuple[bool, Dict[str, Dict[str, int]]]: (is_valid, validation_results)
-                validation_results contains for each column:
-                - below_min: count of values below minimum
-                - above_max: count of values above maximum
-                - null_count: count of null values
+            Dict containing validation results:
+                - is_valid: bool indicating if all values are within ranges
+                - out_of_range: dict mapping columns to counts of out-of-range values
         """
-        is_valid = True
-        validation_results = {}
+        results = {
+            'is_valid': True,
+            'out_of_range': {}
+        }
         
-        for col, (min_val, max_val) in range_checks.items():
+        for col, (min_val, max_val) in column_ranges.items():
             if col not in df.columns:
+                self.logger.warning(f"Column {col} not found in dataframe")
                 continue
                 
-            col_results = {
-                'below_min': 0,
-                'above_max': 0,
-                'null_count': df[col].isnull().sum()
-            }
+            # Count values outside the expected range
+            out_of_range = df[
+                (df[col] < min_val) | (df[col] > max_val)
+            ].shape[0]
             
-            # Check ranges for non-null values
-            non_null_data = df[col].dropna()
-            col_results['below_min'] = (non_null_data < min_val).sum()
-            col_results['above_max'] = (non_null_data > max_val).sum()
-            
-            if col_results['below_min'] > 0 or col_results['above_max'] > 0:
-                is_valid = False
+            if out_of_range > 0:
+                results['is_valid'] = False
+                results['out_of_range'][col] = out_of_range
                 self.logger.warning(
-                    f"Column {col} has {col_results['below_min']} values below {min_val} "
-                    f"and {col_results['above_max']} values above {max_val}"
+                    f"Column {col} has {out_of_range} values outside range [{min_val}, {max_val}]"
                 )
-            
-            validation_results[col] = col_results
-                    
-        return is_valid, validation_results
+        
+        return results
