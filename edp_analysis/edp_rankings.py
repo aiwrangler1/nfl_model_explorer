@@ -57,81 +57,73 @@ def calculate_single_week_edp(df: pd.DataFrame, week: int, calculator: EDPCalcul
     
     # Use EDPCalculator to prepare data and calculate metrics
     df_week = calculator.prepare_play_data(df_week)
+    
+    # Calculate team EDP
     team_edp = calculator.calculate_team_edp(df_week)
     
-    # Clean up columns - remove duplicate season/week columns
-    team_edp = team_edp.loc[:, ~team_edp.columns.str.endswith(('_x', '_y'))]
+    # Store raw metrics before any adjustments
+    raw_metrics = team_edp.copy()
+    raw_metrics = raw_metrics.rename(columns={
+        'offensive_edp': 'raw_offensive_edp',
+        'defensive_edp': 'raw_defensive_edp',
+        'offensive_edp_per_drive': 'raw_offensive_edp_per_drive',
+        'defensive_edp_per_drive': 'raw_defensive_edp_per_drive',
+        'total_edp': 'raw_total_edp',
+        'total_edp_per_drive': 'raw_total_edp_per_drive'
+    })
     
-    # Calculate total EDP
-    team_edp['total_edp'] = team_edp['offensive_edp'] + team_edp['defensive_edp']
-    
-    # Add points and drive data
-    points_data = df_week.groupby(['posteam', 'game_id']).agg({
-        'points': 'sum',
-        'drive': 'nunique'  # Count unique drives
+    # Get final game scores using the score_differential column
+    game_scores = df_week.groupby('game_id').agg({
+        'posteam': 'first',
+        'defteam': 'first',
+        'score_differential': 'last',  # Get final score differential
+        'total_home_score': 'last',    # Get final home score
+        'total_away_score': 'last'     # Get final away score
     }).reset_index()
-    points_against = df_week.groupby(['defteam', 'game_id']).agg({
-        'points': 'sum',
-        'drive': 'nunique'  # Count unique drives
-    }).reset_index()
     
-    # Merge points and drive data
-    team_edp = pd.merge(
-        team_edp,
-        points_data.rename(columns={
-            'posteam': 'team', 
-            'points': 'points_scored',
-            'drive': 'offensive_drives'
-        }),
+    # Create separate records for home and away teams
+    home_scores = game_scores.copy()
+    home_scores['team'] = home_scores['posteam']
+    home_scores['points_scored'] = home_scores['total_home_score']
+    home_scores['points_allowed'] = home_scores['total_away_score']
+    
+    away_scores = game_scores.copy()
+    away_scores['team'] = away_scores['defteam']
+    away_scores['points_scored'] = away_scores['total_away_score']
+    away_scores['points_allowed'] = away_scores['total_home_score']
+    
+    game_scores_final = pd.concat([home_scores, away_scores])
+    
+    # Merge final scores into raw_metrics
+    raw_metrics = pd.merge(
+        raw_metrics,
+        game_scores_final[['game_id', 'team', 'points_scored', 'points_allowed']],
         on=['team', 'game_id'],
         how='left'
     )
-    team_edp = pd.merge(
-        team_edp,
-        points_against.rename(columns={
-            'defteam': 'team', 
-            'points': 'points_allowed',
-            'drive': 'defensive_drives'
-        }),
-        on=['team', 'game_id'],
-        how='left'
-    )
     
-    # Calculate per-drive metrics
-    team_edp['off_edp_per_drive'] = (team_edp['offensive_edp'] / 
-                                    team_edp['offensive_drives']).round(3)
-    team_edp['def_edp_per_drive'] = (team_edp['defensive_edp'] / 
-                                    team_edp['defensive_drives']).round(3)
-    team_edp['total_edp_per_drive'] = (team_edp['off_edp_per_drive'] + 
-                                      team_edp['def_edp_per_drive']).round(3)
+    # Add point differential
+    raw_metrics['point_differential'] = raw_metrics['points_scored'] - raw_metrics['points_allowed']
     
-    # Round EDP metrics
-    edp_cols = ['offensive_edp', 'defensive_edp', 'total_edp']
-    team_edp[edp_cols] = team_edp[edp_cols].round(3)
-    
-    # Select and order columns
-    columns = [
+    # Ensure all required columns are present
+    required_columns = [
         'team', 'game_id',
-        'total_edp', 'offensive_edp', 'defensive_edp',
-        'total_edp_per_drive', 'off_edp_per_drive', 'def_edp_per_drive',
-        'points_scored', 'points_allowed',
+        'raw_total_edp', 'raw_offensive_edp', 'raw_defensive_edp',
+        'raw_total_edp_per_drive', 'raw_offensive_edp_per_drive', 'raw_defensive_edp_per_drive',
+        'points_scored', 'points_allowed', 'point_differential',
         'offensive_drives', 'defensive_drives'
     ]
     
-    return team_edp[columns]
+    missing_cols = [col for col in required_columns if col not in raw_metrics.columns]
+    if missing_cols:
+        raise KeyError(f"Missing required columns: {missing_cols}")
+    
+    return raw_metrics[required_columns]
 
 
 def calculate_cumulative_edp(df: pd.DataFrame, max_week: int, calculator: EDPCalculator) -> pd.DataFrame:
     """
-    Calculate cumulative SoS-adjusted EDP metrics through the specified week.
-    
-    Args:
-        df: Play-by-play data
-        max_week: Latest week to include
-        calculator: EDPCalculator instance
-        
-    Returns:
-        DataFrame with season-total team metrics
+    Calculate cumulative EDP metrics through the specified week.
     """
     # Filter data through max week
     week_mask = (df['game_id']
@@ -143,194 +135,314 @@ def calculate_cumulative_edp(df: pd.DataFrame, max_week: int, calculator: EDPCal
     # Use EDPCalculator to prepare data and calculate metrics
     df_through_week = calculator.prepare_play_data(df_through_week)
     
-    # Get raw team EDP metrics
-    team_edp = calculator.calculate_team_edp(df_through_week)
-    
-    # Add season and week information from game_id
-    team_edp['season'] = 2024
-    team_edp['week'] = team_edp['game_id'].str.extract(r'2024_(\d+)')[0].astype(int)
-    
-    # Create OpponentStrengthAdjuster and calculate adjusted metrics
-    strength_adjuster = OpponentStrengthAdjuster()
-    adjusted_metrics = strength_adjuster.calculate_adjusted_metrics(
-        offensive_edp=team_edp[['team', 'game_id', 'season', 'week', 'offensive_edp']],
-        defensive_edp=team_edp[['team', 'game_id', 'season', 'week', 'defensive_edp']]
-    )
-    
-    # Convert adjusted metrics to DataFrame
-    adjusted_offensive = pd.Series(adjusted_metrics['offensive'])
-    adjusted_defensive = pd.Series(adjusted_metrics['defensive'])
-    
-    # Add points and drive data
-    points_data = df_through_week.groupby('posteam').agg({
-        'points': 'sum',
-        'drive': 'nunique'  # Count unique drives
-    }).reset_index()
-    points_against = df_through_week.groupby('defteam').agg({
-        'points': 'sum',
-        'drive': 'nunique'  # Count unique drives
-    }).reset_index()
-    
-    # Create season totals DataFrame with SoS-adjusted metrics
-    season_totals = pd.DataFrame({
-        'team': adjusted_offensive.index,
-        'offensive_edp': adjusted_offensive.values,
-        'defensive_edp': adjusted_defensive.values
-    })
-    
-    # Merge points and drive data
-    season_totals = pd.merge(
-        season_totals,
-        points_data.rename(columns={
-            'posteam': 'team', 
-            'points': 'points_scored',
-            'drive': 'offensive_drives'
-        }),
-        on='team',
-        how='left'
-    )
-    season_totals = pd.merge(
-        season_totals,
-        points_against.rename(columns={
-            'defteam': 'team', 
-            'points': 'points_allowed',
-            'drive': 'defensive_drives'
-        }),
-        on='team',
-        how='left'
-    )
-    
-    # Calculate total EDP and point differential
-    season_totals['total_edp'] = (season_totals['offensive_edp'] + 
-                                 season_totals['defensive_edp']).round(3)
-    season_totals['point_differential'] = (season_totals['points_scored'] - 
-                                         season_totals['points_allowed'])
-    
-    # Calculate per-drive metrics
-    season_totals['off_edp_per_drive'] = (season_totals['offensive_edp'] / 
-                                         season_totals['offensive_drives']).round(3)
-    season_totals['def_edp_per_drive'] = (season_totals['defensive_edp'] / 
-                                         season_totals['defensive_drives']).round(3)
-    season_totals['total_edp_per_drive'] = (season_totals['off_edp_per_drive'] + 
-                                           season_totals['def_edp_per_drive']).round(3)
+    # Calculate team EDP for each game
+    game_edp = calculator.calculate_team_edp(df_through_week)
     
     # Calculate games played
-    games_played = team_edp.groupby('team').size()
-    season_totals['games_played'] = season_totals['team'].map(games_played)
+    games_played = game_edp.groupby('team').size().reset_index(name='games_played')
     
-    # Round EDP metrics
-    edp_cols = ['offensive_edp', 'defensive_edp', 'total_edp']
-    season_totals[edp_cols] = season_totals[edp_cols].round(3)
+    # Calculate raw season totals by summing up game values
+    raw_season_totals = game_edp.groupby('team').agg({
+        'offensive_edp': 'sum',
+        'defensive_edp': 'sum',
+        'offensive_drives': 'sum',
+        'defensive_drives': 'sum'
+    }).reset_index()
+    
+    # Calculate raw total EDP
+    raw_season_totals['raw_offensive_edp'] = raw_season_totals['offensive_edp']
+    raw_season_totals['raw_defensive_edp'] = raw_season_totals['defensive_edp']
+    raw_season_totals['raw_total_edp'] = raw_season_totals['raw_offensive_edp'] + raw_season_totals['raw_defensive_edp']
+    
+    # Calculate raw per-drive metrics
+    raw_season_totals['raw_offensive_edp_per_drive'] = raw_season_totals['raw_offensive_edp'] / raw_season_totals['offensive_drives']
+    raw_season_totals['raw_defensive_edp_per_drive'] = raw_season_totals['raw_defensive_edp'] / raw_season_totals['defensive_drives']
+    raw_season_totals['raw_total_edp_per_drive'] = raw_season_totals['raw_total_edp'] / raw_season_totals['offensive_drives']
+    
+    # Calculate SoS adjustments
+    strength_adjuster = OpponentStrengthAdjuster()
+    sos_game_adjustments = strength_adjuster.calculate_adjusted_metrics(
+        offensive_edp=game_edp[['team', 'game_id', 'season', 'week', 'offensive_edp']],
+        defensive_edp=game_edp[['team', 'game_id', 'season', 'week', 'defensive_edp']]
+    )
+    
+    # Create game-level SoS adjustments DataFrame
+    sos_factors = pd.DataFrame({
+        'team': list(sos_game_adjustments['offensive'].keys()),
+        'sos_offensive_factor': [v for v in sos_game_adjustments['offensive'].values()],
+        'sos_defensive_factor': [v for v in sos_game_adjustments['defensive'].values()]
+    })
+    
+    # Normalize SoS factors to center around 1.0
+    sos_factors['sos_offensive_factor'] = sos_factors['sos_offensive_factor'] / sos_factors['sos_offensive_factor'].mean()
+    sos_factors['sos_defensive_factor'] = sos_factors['sos_defensive_factor'] / sos_factors['sos_defensive_factor'].mean()
+    
+    # Apply SoS adjustments to raw season totals
+    season_totals = pd.merge(raw_season_totals, sos_factors, on='team', how='left')
+    season_totals['sos_offensive_edp'] = season_totals['raw_offensive_edp'] * season_totals['sos_offensive_factor']
+    season_totals['sos_defensive_edp'] = season_totals['raw_defensive_edp'] * season_totals['sos_defensive_factor']
+    season_totals['sos_total_edp'] = season_totals['sos_offensive_edp'] + season_totals['sos_defensive_edp']
+    
+    # Calculate SoS per-drive metrics
+    season_totals['sos_offensive_edp_per_drive'] = season_totals['sos_offensive_edp'] / season_totals['offensive_drives']
+    season_totals['sos_defensive_edp_per_drive'] = season_totals['sos_defensive_edp'] / season_totals['defensive_drives']
+    season_totals['sos_total_edp_per_drive'] = season_totals['sos_total_edp'] / season_totals['offensive_drives']
+    
+    # Add games played
+    season_totals = pd.merge(season_totals, games_played, on='team', how='left')
     
     # Sort by total EDP
-    season_totals = season_totals.sort_values('total_edp', ascending=False)
+    season_totals = season_totals.sort_values('raw_total_edp', ascending=False)
     
-    # Select and order columns
-    columns = [
-        'team',
-        'total_edp', 'offensive_edp', 'defensive_edp',
-        'total_edp_per_drive', 'off_edp_per_drive', 'def_edp_per_drive',
-        'point_differential', 'points_scored', 'points_allowed',
-        'offensive_drives', 'defensive_drives',
-        'games_played'
-    ]
+    return season_totals
+
+
+def validate_input_data(df: pd.DataFrame) -> None:
+    """Validate input data has required columns and formats."""
+    required_columns = {
+        'game_id', 'play_id', 'posteam', 'defteam', 'week', 'season',
+        'drive', 'down', 'yards_gained', 'play_type', 'yardline_100',
+        'ydstogo', 'total_home_score', 'total_away_score'
+    }
     
-    return season_totals[columns]
+    missing_cols = required_columns - set(df.columns)
+    if missing_cols:
+        raise ValueError(f"Missing required columns: {missing_cols}")
+    
+    # Validate game_id format
+    invalid_game_ids = df[~df['game_id'].str.match(r'2024_\d+_\w+_\w+')]['game_id'].unique()
+    if len(invalid_game_ids) > 0:
+        raise ValueError(f"Invalid game_id format found: {invalid_game_ids}")
+    
+    # Check for null values in critical columns
+    critical_columns = ['game_id', 'posteam', 'defteam', 'week', 'season']
+    null_counts = df[critical_columns].isnull().sum()
+    if null_counts.any():
+        print("\nWarning: Null values found in critical columns:")
+        print(null_counts[null_counts > 0])
 
 
 def process_season_data(df: pd.DataFrame, max_week: int, calculator: EDPCalculator) -> Tuple[List[pd.DataFrame], pd.DataFrame]:
     """Process EDP data for all weeks and calculate cumulative stats."""
-    weekly_rankings = []
-    
-    # Calculate individual week stats
-    for week in range(1, max_week + 1):
-        print(f"\nProcessing Week {week}...")
-        week_rankings = calculate_single_week_edp(df, week, calculator)
-        if week_rankings is not None:
-            weekly_rankings.append(week_rankings)
-    
-    # Calculate cumulative stats
-    print("\nCalculating season totals...")
-    cumulative_rankings = calculate_cumulative_edp(df, max_week, calculator)
-    
-    return weekly_rankings, cumulative_rankings
+    try:
+        # Validate input data
+        validate_input_data(df)
+        
+        weekly_rankings = []
+        
+        # Calculate individual week stats
+        for week in range(1, max_week + 1):
+            print(f"\nProcessing Week {week}...")
+            try:
+                week_rankings = calculate_single_week_edp(df, week, calculator)
+                if week_rankings is not None and not week_rankings.empty:
+                    weekly_rankings.append(week_rankings)
+                else:
+                    print(f"Warning: No data found for Week {week}")
+            except Exception as e:
+                print(f"Error processing Week {week}: {str(e)}")
+                continue
+        
+        if not weekly_rankings:
+            raise ValueError("No weekly rankings could be calculated")
+        
+        # Calculate cumulative stats
+        print("\nCalculating season totals...")
+        cumulative_rankings = calculate_cumulative_edp(df, max_week, calculator)
+        
+        # Validate output
+        if cumulative_rankings.empty:
+            raise ValueError("Cumulative rankings calculation failed")
+            
+        return weekly_rankings, cumulative_rankings
+        
+    except Exception as e:
+        print(f"\nError processing season data: {str(e)}")
+        raise
 
 
-def save_rankings(weekly_rankings: List[pd.DataFrame],
-                 cumulative_rankings: pd.DataFrame,
-                 max_week: int) -> str:
-    """Save weekly and cumulative rankings to Excel."""
-    # Create output folder
-    output_folder = os.path.join(project_root, "model_outputs", "rankings", f"week_{max_week}")
-    os.makedirs(output_folder, exist_ok=True)
+def save_rankings_to_excel(
+    weekly_rankings: List[pd.DataFrame],
+    season_rankings: pd.DataFrame,
+    max_week: int,
+    output_dir: str = 'model_outputs'
+) -> str:
+    """
+    Save weekly and season rankings to Excel.
     
-    # Generate filename with timestamp
-    timestamp = datetime.datetime.now().strftime("%b %d-%I:%M%p").lower()
+    Args:
+        weekly_rankings: List of weekly ranking DataFrames
+        season_rankings: Season-to-date rankings DataFrame
+        max_week: Latest week included in the rankings
+        output_dir: Directory to save the output file
+        
+    Returns:
+        str: Path to the saved Excel file
+    """
+    # Create output directory if it doesn't exist
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    
+    # Generate filename with timestamp and week
+    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     excel_filename = os.path.join(
-        output_folder,
-        f"nfl_edp_rankings_2024_week_{max_week}_{timestamp}.xlsx"
+        output_dir,
+        f'edp_rankings_week{max_week}_{timestamp}.xlsx'
     )
     
-    # Save to Excel with a sheet for each week plus cumulative
+    # Define column sets
+    season_columns = [
+        'team', 'games_played',
+        # Raw metrics
+        'raw_total_edp', 'raw_offensive_edp', 'raw_defensive_edp',
+        'raw_total_edp_per_drive', 'raw_offensive_edp_per_drive', 'raw_defensive_edp_per_drive',
+        # SoS-adjusted metrics
+        'sos_total_edp', 'sos_offensive_edp', 'sos_defensive_edp',
+        'sos_total_edp_per_drive', 'sos_offensive_edp_per_drive', 'sos_defensive_edp_per_drive',
+        # Recency-weighted metrics
+        'weighted_total_edp', 'weighted_offensive_edp', 'weighted_defensive_edp',
+        'weighted_total_edp_per_drive', 'weighted_offensive_edp_per_drive', 'weighted_defensive_edp_per_drive',
+        # Blended metrics (SoS + Recency)
+        'blended_total_edp', 'blended_offensive_edp', 'blended_defensive_edp',
+        'blended_total_edp_per_drive', 'blended_offensive_edp_per_drive', 'blended_defensive_edp_per_drive',
+        # Additional stats
+        'point_differential', 'points_scored', 'points_allowed',
+        'points_per_game', 'points_allowed_per_game',
+        'offensive_drives', 'defensive_drives'
+    ]
+    
+    weekly_columns = [
+        'team', 'game_id',
+        # Raw metrics for the week
+        'raw_total_edp', 'raw_offensive_edp', 'raw_defensive_edp',
+        'raw_total_edp_per_drive', 'raw_offensive_edp_per_drive', 'raw_defensive_edp_per_drive',
+        # Game stats
+        'points_scored', 'points_allowed', 'point_differential',
+        'offensive_drives', 'defensive_drives'
+    ]
+    
+    # Filter columns to only those that exist in the DataFrames
+    season_columns = [col for col in season_columns if col in season_rankings.columns]
+    
+    # Create Excel writer
     with pd.ExcelWriter(excel_filename, engine='openpyxl') as writer:
-        # Save each individual week
-        for week, week_data in enumerate(weekly_rankings, 1):
-            # Sort by total EDP (offensive + defensive)
-            week_data['total_edp'] = week_data['offensive_edp'] + week_data['defensive_edp']
-            week_data = week_data.sort_values('total_edp', ascending=False)
-            
-            # Round numeric columns
-            numeric_cols = week_data.select_dtypes(include=['float64']).columns
-            week_data[numeric_cols] = week_data[numeric_cols].round(3)
-            
-            week_data.to_excel(writer, sheet_name=f'Week_{week}', index=False)
+        # Write season-to-date rankings
+        season_rankings.to_excel(
+            writer,
+            sheet_name='season_total',
+            index=False,
+            columns=season_columns
+        )
         
-        # Save cumulative stats (already properly formatted from calculate_cumulative_edp)
-        numeric_cols = cumulative_rankings.select_dtypes(include=['float64']).columns
-        cumulative_rankings[numeric_cols] = cumulative_rankings[numeric_cols].round(3)
-        cumulative_rankings.to_excel(writer, sheet_name='Season_Total', index=False)
+        # Write weekly rankings
+        for week_num, week_df in enumerate(weekly_rankings, 1):
+            # Filter columns to only those that exist in this week's DataFrame
+            available_columns = [col for col in weekly_columns if col in week_df.columns]
+            
+            week_df.to_excel(
+                writer,
+                sheet_name=f'week_{week_num}',
+                index=False,
+                columns=available_columns
+            )
     
     return excel_filename
 
 
+def calculate_season_rankings(weekly_rankings: List[pd.DataFrame]) -> pd.DataFrame:
+    """Calculate cumulative season-to-date rankings."""
+    if not weekly_rankings:
+        return pd.DataFrame()
+        
+    # Concatenate all weekly rankings
+    all_weeks = pd.concat(weekly_rankings, ignore_index=True)
+    
+    # Calculate season totals
+    season_totals = all_weeks.groupby('team').agg({
+        'offensive_edp': 'sum',
+        'defensive_edp': 'sum',
+        'total_edp': 'sum',
+        'points_scored': 'sum',
+        'points_allowed': 'sum',
+        'offensive_drives': 'sum',
+        'defensive_drives': 'sum',
+        'game_id': 'count'  # Number of games played
+    }).reset_index()
+    
+    # Calculate per-drive and per-game metrics
+    season_totals['offensive_edp_per_drive'] = (
+        season_totals['offensive_edp'] / season_totals['offensive_drives']
+    )
+    season_totals['defensive_edp_per_drive'] = (
+        season_totals['defensive_edp'] / season_totals['defensive_drives']
+    )
+    season_totals['total_edp_per_drive'] = (
+        season_totals['total_edp'] / season_totals['offensive_drives']
+    )
+    
+    # Add point differential
+    season_totals['point_differential'] = (
+        season_totals['points_scored'] - season_totals['points_allowed']
+    )
+    
+    # Add per-game metrics
+    season_totals['points_per_game'] = (
+        season_totals['points_scored'] / season_totals['game_id']
+    )
+    season_totals['points_allowed_per_game'] = (
+        season_totals['points_allowed'] / season_totals['game_id']
+    )
+    
+    # Sort by total EDP
+    season_totals = season_totals.sort_values('total_edp', ascending=False)
+    
+    # Round numeric columns
+    numeric_cols = season_totals.select_dtypes(include=[np.number]).columns
+    season_totals[numeric_cols] = season_totals[numeric_cols].round(3)
+    
+    return season_totals
+
+
 def main() -> None:
     """Main execution function."""
-    # Parse command line arguments
-    args = parse_arguments()
-    
     try:
-        # Initialize EDP calculator
-        calculator = EDPCalculator()
+        # Parse command line arguments
+        args = parse_arguments()
         
-        # Load and preprocess data
         print("\nLoading and preprocessing data...")
-        years = [2024]
-        df_all_years = load_and_prepare_data(years)
+        df = load_and_prepare_data()
         
-        # Determine latest week if not specified
-        if args.week:
-            max_week = args.week
-        else:
-            max_week = (df_all_years['game_id']
-                       .str.extract(r'2024_(\d+)')[0]
-                       .fillna(0)
-                       .astype(int)
-                       .max())
+        if df.empty:
+            raise ValueError("No data loaded")
+            
+        # Determine max week
+        max_week = args.week
+        if max_week is None:
+            max_week = df['game_id'].str.extract(r'2024_(\d+)')[0].astype(int).max()
+            if pd.isna(max_week):
+                raise ValueError("Could not determine maximum week from data")
         
         print(f"\nAnalyzing data through Week {max_week}")
         
-        # Process all weeks and calculate cumulative stats
+        # Initialize calculator
+        calculator = EDPCalculator()
+        
+        # Process data and generate rankings
         weekly_rankings, cumulative_rankings = process_season_data(
-            df_all_years, max_week, calculator
+            df, max_week, calculator
         )
         
+        # Validate rankings before saving
+        if not weekly_rankings or cumulative_rankings.empty:
+            raise ValueError("No rankings generated")
+            
         # Save results
-        output_file = save_rankings(weekly_rankings, cumulative_rankings, max_week)
+        output_file = save_rankings_to_excel(
+            weekly_rankings,
+            cumulative_rankings,
+            max_week
+        )
         
         print(f"\nRankings saved to: {output_file}")
-        print("\nTop 5 teams by Total EDP:")
-        print(cumulative_rankings[['team', 'total_edp', 'offensive_edp', 
-                                 'defensive_edp', 'games_played']].head())
         
     except Exception as e:
         print(f"\nError generating rankings: {str(e)}")

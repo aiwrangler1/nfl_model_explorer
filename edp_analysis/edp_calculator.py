@@ -22,6 +22,38 @@ class EDPCalculator:
         self.long_window = LONG_EDP_WINDOW
         self.decay_factor = EDP_DECAY_FACTOR
         
+    def validate_play_data(self, df: pd.DataFrame) -> None:
+        """
+        Validate play-by-play data has required columns and formats.
+        
+        Args:
+            df: Play-by-play DataFrame to validate
+            
+        Raises:
+            ValueError: If data validation fails
+        """
+        required_columns = {
+            'play_type', 'down', 'yards_gained', 'ydstogo', 'yardline_100',
+            'drive', 'posteam', 'defteam', 'game_id', 'field_goal_result',
+            'touchdown', 'safety', 'extra_point_result', 'two_point_conv_result'
+        }
+        
+        missing_cols = required_columns - set(df.columns)
+        if missing_cols:
+            raise ValueError(f"Missing required columns for EDP calculation: {missing_cols}")
+            
+        # Validate play types
+        valid_play_types = {'run', 'pass', 'field_goal'}
+        invalid_plays = df[~df['play_type'].isin(valid_play_types)]['play_type'].unique()
+        if len(invalid_plays) > 0:
+            print(f"\nWarning: Unknown play types found: {invalid_plays}")
+            
+        # Check for null values in critical columns
+        null_counts = df[list(required_columns)].isnull().sum()
+        if null_counts.any():
+            print("\nWarning: Null values found in play data:")
+            print(null_counts[null_counts > 0])
+    
     def load_and_process_data(self, seasons=None) -> pd.DataFrame:
         """
         Load and process NFL play-by-play data.
@@ -33,15 +65,15 @@ class EDPCalculator:
             pd.DataFrame: Processed play-by-play data
         """
         if seasons is None:
-            seasons = [2023]
+            seasons = [2024]
             
         # Load play-by-play data
         df = nfl.import_pbp_data(seasons)
         
-        # Basic filtering
+        # Filter for relevant play types
         df = df[
             (df['play_type'].isin(['run', 'pass', 'field_goal'])) &
-            (~df['down'].isna())
+            (~df['down'].isna())  # Ensure valid downs
         ].copy()
         
         return self.prepare_play_data(df)
@@ -172,46 +204,54 @@ class EDPCalculator:
         Prepare play-by-play data for EDP calculation by deriving necessary columns.
         
         Args:
-            df (pd.DataFrame): Raw play-by-play data
+            df: Raw play-by-play data
             
         Returns:
             pd.DataFrame: Processed data with all required columns
         """
-        # Create copy to avoid modifying original
-        df = df.copy()
-        
-        # Calculate points from scoring plays
-        df['points'] = 0
-        df.loc[df['touchdown'] == 1, 'points'] = 6
-        df.loc[df['field_goal_result'] == 'made', 'points'] = 3
-        df.loc[df['extra_point_result'] == 'good', 'points'] = 1
-        df.loc[df['two_point_conv_result'] == 'success', 'points'] = 2
-        df.loc[df['safety'] == 1, 'points'] = 2
-        
-        # Define scoring opportunities
-        df['is_scoring_opportunity'] = (
-            (df['yardline_100'] <= 20) | 
-            (df['field_goal_attempt'] == 1)
-        ).astype(int)
-        
-        # Calculate success for each play
-        df = self.calculate_play_success(df)
-        
-        # Calculate explosive plays
-        df['explosive_play'] = (df['yards_gained'] >= EXPLOSIVE_PLAY_THRESHOLD).astype(int)
-        
-        # Calculate late down conversions
-        df['late_down_conversion'] = ((df['down'] >= 3) & (df['success'] == 1)).astype(int)
-        
-        # Calculate scoring zone successes
-        df['scoring_zone_success'] = (df['is_scoring_opportunity'] & df['success']).astype(int)
-        
-        # Calculate EPA if not already present
-        if 'epa' not in df.columns:
-            df['epa'] = df.apply(self.calculate_epa, axis=1)
-        
-        return df
-    
+        try:
+            # Validate input data
+            self.validate_play_data(df)
+            
+            # Create copy to avoid modifying original
+            df = df.copy()
+            
+            # Calculate points from scoring plays
+            df['points'] = 0
+            df.loc[df['touchdown'] == 1, 'points'] = 6
+            df.loc[df['field_goal_result'] == 'made', 'points'] = 3
+            df.loc[df['extra_point_result'] == 'good', 'points'] = 1
+            df.loc[df['two_point_conv_result'] == 'success', 'points'] = 2
+            df.loc[df['safety'] == 1, 'points'] = 2
+            
+            # Define scoring opportunities
+            df['is_scoring_opportunity'] = (
+                (df['yardline_100'] <= 20) | 
+                (df['field_goal_attempt'] == 1)
+            ).astype(int)
+            
+            # Calculate success for each play
+            df = self.calculate_play_success(df)
+            
+            # Calculate explosive plays
+            df['explosive_play'] = (df['yards_gained'] >= EXPLOSIVE_PLAY_THRESHOLD).astype(int)
+            
+            # Calculate late down conversions
+            df['late_down_conversion'] = ((df['down'] >= 3) & (df['success'] == 1)).astype(int)
+            
+            # Calculate scoring zone successes
+            df['scoring_zone_success'] = (df['is_scoring_opportunity'] & df['success']).astype(int)
+            
+            # Calculate EPA if not already present
+            if 'epa' not in df.columns:
+                df['epa'] = df.apply(self.calculate_epa, axis=1)
+            
+            return df
+            
+        except Exception as e:
+            print(f"\nError preparing play data: {str(e)}")
+            raise
+            
     def calculate_epa(self, play: pd.Series) -> float:
         """
         Calculate Expected Points Added (EPA) for a play.
@@ -366,27 +406,104 @@ class EDPCalculator:
         defensive_edp = defensive_edp.rename(columns={'posteam': 'team'})
         return defensive_edp
 
-    def calculate_team_edp(self, df: pd.DataFrame) -> pd.DataFrame:
+    def calculate_team_edp(self, play_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Calculate both offensive and defensive EDP metrics for teams.
+        Calculate offensive and defensive EDP for each team.
         
         Args:
-            df (pd.DataFrame): The play-by-play dataframe.
+            play_df: DataFrame containing play-by-play data
             
         Returns:
-            pd.DataFrame: A dataframe with team-level EDP metrics.
+            DataFrame with team-level offensive and defensive EDP
         """
-        # Calculate offensive and defensive EDP
-        offensive_edp = self.calculate_offensive_edp(df)
-        defensive_edp = self.calculate_defensive_edp(df)
+        # Calculate offensive EDP
+        offensive_edp = self.calculate_offensive_edp(play_df)
         
-        # Combine metrics
-        combined_edp = pd.merge(
-            offensive_edp, 
-            defensive_edp, 
-            on=['team', 'game_id'],
-            how='outer',
-            validate='1:1'
+        # Calculate defensive EDP
+        defensive_edp = self.calculate_defensive_edp(play_df)
+        
+        # Calculate drive counts
+        offensive_drives = (
+            play_df.groupby(['posteam', 'game_id'])['drive']
+            .nunique()
+            .reset_index()
+            .rename(columns={'posteam': 'team', 'drive': 'offensive_drives'})
         )
         
-        return combined_edp
+        defensive_drives = (
+            play_df.groupby(['defteam', 'game_id'])['drive']
+            .nunique()
+            .reset_index()
+            .rename(columns={'defteam': 'team', 'drive': 'defensive_drives'})
+        )
+        
+        # Merge offensive and defensive metrics
+        team_edp = pd.merge(
+            offensive_edp,
+            defensive_edp,
+            on=['team', 'game_id'],
+            how='outer'
+        )
+        
+        # Add drive counts
+        team_edp = pd.merge(
+            team_edp,
+            offensive_drives,
+            on=['team', 'game_id'],
+            how='left'
+        )
+        
+        team_edp = pd.merge(
+            team_edp,
+            defensive_drives,
+            on=['team', 'game_id'],
+            how='left'
+        )
+        
+        # Calculate per-drive metrics
+        team_edp['offensive_edp_per_drive'] = (
+            team_edp['offensive_edp'] / team_edp['offensive_drives']
+        )
+        team_edp['defensive_edp_per_drive'] = (
+            team_edp['defensive_edp'] / team_edp['defensive_drives']
+        )
+        
+        # Calculate total EDP
+        team_edp['total_edp'] = team_edp['offensive_edp'] + team_edp['defensive_edp']
+        team_edp['total_edp_per_drive'] = team_edp['total_edp'] / team_edp['offensive_drives']
+        
+        return team_edp
+
+    def validate_total_edp_output(self, df: pd.DataFrame) -> None:
+        """
+        Validate total EDP output has required columns and formats.
+        
+        Args:
+            df: Total EDP DataFrame to validate
+            
+        Raises:
+            ValueError: If validation fails
+        """
+        required_columns = {
+            'team', 'game_id', 'offensive_edp', 'defensive_edp',
+            'offensive_drives', 'defensive_drives', 'offensive_edp_per_drive',
+            'defensive_edp_per_drive', 'total_edp', 'total_edp_per_drive'
+        }
+        
+        missing_cols = required_columns - set(df.columns)
+        if missing_cols:
+            raise ValueError(f"Missing required columns in total EDP output: {missing_cols}")
+            
+        # Check for null values
+        null_counts = df[list(required_columns)].isnull().sum()
+        if null_counts.any():
+            print("\nWarning: Null values found in total EDP output:")
+            print(null_counts[null_counts > 0])
+            
+        # Validate team column
+        if df['team'].isnull().any():
+            raise ValueError("Found null values in team column")
+            
+        # Validate drive counts
+        if (df['offensive_drives'] <= 0).any() or (df['defensive_drives'] <= 0).any():
+            raise ValueError("Found invalid drive counts (zero or negative)")

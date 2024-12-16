@@ -118,64 +118,97 @@ class EDPGamePredictor:
             
         return pd.DataFrame(matchups)
     
+    def predict_game(
+        self,
+        offensive_advantage: float,
+        defensive_advantage: float,
+        st_advantage: float,
+        home_field: bool = True
+    ) -> Dict[str, float]:
+        """
+        Predict game outcome using offensive, defensive, and special teams advantages.
+        
+        Args:
+            offensive_advantage: Home offensive EDP - Away defensive EDP
+            defensive_advantage: Away offensive EDP - Home defensive EDP
+            st_advantage: Home ST_EDP - Away ST_EDP
+            home_field: Whether to include home field advantage
+            
+        Returns:
+            Dictionary with prediction probabilities and spread
+        """
+        # Base weights for each component
+        OFF_WEIGHT = 0.45
+        DEF_WEIGHT = 0.45
+        ST_WEIGHT = 0.10
+        HOME_ADVANTAGE = 2.5 if home_field else 0
+        
+        # Calculate weighted total advantage
+        total_advantage = (
+            OFF_WEIGHT * offensive_advantage +
+            DEF_WEIGHT * defensive_advantage +
+            ST_WEIGHT * st_advantage +
+            HOME_ADVANTAGE
+        )
+        
+        # Convert to spread (negative means home team favored)
+        predicted_spread = -total_advantage * 7.0  # Convert EDP to points
+        
+        # Calculate win probability using logistic function
+        home_win_prob = 1 / (1 + np.exp(-total_advantage))
+        
+        return {
+            'home_win_prob': home_win_prob,
+            'spread': predicted_spread,
+            'total_advantage': total_advantage
+        }
+        
     def fit_hierarchical_model(
         self,
         X: pd.DataFrame,
-        y: np.ndarray
+        y: np.ndarray,
+        include_st: bool = True
     ) -> None:
         """
-        Fit a Bayesian hierarchical model for game prediction.
+        Fit hierarchical Bayesian model including special teams.
         
         Args:
-            X: Feature matrix including EDP differentials and uncertainties
+            X: Feature matrix with EDP differences
             y: Target point differentials
+            include_st: Whether to include special teams in model
         """
-        # Scale features
-        X_scaled = X.copy()
-        feature_cols = ['edp_diff', 'def_edp_diff', 'home_edp_uncertainty', 'away_edp_uncertainty']
-        X_scaled[feature_cols] = self.scaler.fit_transform(X[feature_cols])
-        
-        # Scale target
-        y_scaled = y / y.std()
-        
-        with pm.Model() as self.model:
-            # Hyperpriors
-            mu_alpha = pm.Normal('mu_alpha', mu=0, sigma=2)
-            sigma_alpha = pm.HalfNormal('sigma_alpha', sigma=2)
+        with pm.Model() as model:
+            # Priors for coefficients
+            β_off = pm.Normal('β_off', mu=0.45, sigma=0.1)
+            β_def = pm.Normal('β_def', mu=0.45, sigma=0.1)
+            β_st = pm.Normal('β_st', mu=0.10, sigma=0.05)
             
-            # Non-centered parameterization for team effects
-            alpha_raw = pm.Normal('alpha_raw', mu=0, sigma=1, shape=len(X['home_team'].unique()))
-            alpha = pm.Deterministic('alpha', mu_alpha + sigma_alpha * alpha_raw)
+            # Home field advantage
+            hfa = pm.Normal('hfa', mu=2.5, sigma=1.0)
             
-            # Weakly informative priors for feature effects
-            beta_edp = pm.Normal('beta_edp', mu=0, sigma=2)
-            beta_def = pm.Normal('beta_def', mu=0, sigma=2)
-            
-            # Error term with half-normal prior
-            sigma = pm.HalfNormal('sigma', sigma=2)
+            # Model error
+            σ = pm.HalfNormal('σ', sigma=10)
             
             # Expected point differential
-            team_idx = pd.Categorical(X['home_team']).codes
-            mu = (alpha[team_idx] + 
-                  beta_edp * X_scaled['edp_diff'].values +
-                  beta_def * X_scaled['def_edp_diff'].values)
-            
-            # Student's t likelihood for robustness
-            nu = pm.Exponential('nu', lam=1/30) + 2  # degrees of freedom
-            y_obs = pm.StudentT('y_obs', nu=nu, mu=mu, sigma=sigma, observed=y_scaled)
-            
-            # Sample from posterior with increased target_accept
-            self.trace = pm.sample(
-                draws=self.mcmc_samples,
-                tune=1000,
-                target_accept=0.95,
-                random_seed=self.random_seed,
-                return_inferencedata=True,
-                init='adapt_diag'
+            μ = (
+                β_off * X['offensive_advantage'].values +
+                β_def * X['defensive_advantage'].values +
+                (β_st * X['st_advantage'].values if include_st else 0) +
+                hfa
             )
             
-            # Store scaling factors for prediction
-            self.y_scale = y.std()
+            # Likelihood
+            y_obs = pm.Normal('y_obs', mu=μ, sigma=σ, observed=y)
+            
+            # Fit model
+            self.trace = pm.sample(
+                self.mcmc_samples,
+                tune=1000,
+                return_inferencedata=True,
+                random_seed=self.random_seed
+            )
+            
+        self.model = model
     
     def predict(
         self,

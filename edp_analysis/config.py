@@ -56,3 +56,11 @@ WP_CALIBRATION_BINS = 10
 # Logging settings
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 LOG_LEVEL = 'INFO'
+
+# Special Teams EPA Weights
+ST_EPA_WEIGHTS = {
+    'field_goal': 1.0,    # Full weight for FG outcomes
+    'punt': 0.7,          # Moderate weight for punt outcomes
+    'kickoff': 0.5,       # Lower weight for kickoff outcomes
+    'extra_point': 0.3    # Lowest weight for XP outcomes
+}

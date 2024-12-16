@@ -110,3 +110,30 @@ Adjusted metrics:
 2024-12-07 05:30:39,944 - INFO - BUF: Off=81.70, Def=2.71
 2024-12-07 05:30:39,944 - INFO - CAR: Off=65.02, Def=-7.55
 2024-12-07 05:30:39,949 - INFO - Using 2024 data for 32 teams, 2023 data for 0 teams
+2024-12-10 01:32:44,431 - INFO - Calculated opponent strength metrics for 32 teams
+2024-12-10 01:32:44,440 - INFO - Adjusted metrics calculated for 32 teams
+2024-12-10 01:32:46,308 - INFO - Auto-assigning NUTS sampler...
+2024-12-10 01:32:46,308 - INFO - Initializing NUTS using adapt_diag...
+2024-12-10 01:32:48,554 - INFO - Multiprocess sampling (4 chains in 4 jobs)
+2024-12-10 01:32:48,554 - INFO - NUTS: [mu_alpha, sigma_alpha, alpha_raw, beta_edp, beta_def, sigma, nu]
+2024-12-10 01:33:03,784 - INFO - Sampling 4 chains for 1_000 tune and 2_000 draw iterations (4_000 + 8_000 draws total) took 15 seconds.
+2024-12-10 01:33:04,235 - INFO - Model initialized with historical data and scaler fitted
+2024-12-10 01:33:04,263 - INFO - MatchupAnalyzer initialized for 2024 season
+2024-12-10 01:33:25,911 - INFO - 
+Raw metrics before adjustments:
+2024-12-10 01:33:25,912 - INFO -   team  offensive_edp  defensive_edp
+0  ARI      70.971934      -3.142150
+1  ATL      77.169241      -5.523491
+2  BAL      86.641230      -1.715906
+3  BUF      82.434698       0.922622
+4  CAR      65.712712      -6.166092
+2024-12-10 01:33:25,923 - INFO - Calculated opponent strength metrics for 32 teams
+2024-12-10 01:33:25,932 - INFO - Adjusted metrics calculated for 32 teams
+2024-12-10 01:33:25,932 - INFO - 
+Adjusted metrics:
+2024-12-10 01:33:25,932 - INFO - ARI: Off=70.97, Def=-3.14
+2024-12-10 01:33:25,932 - INFO - ATL: Off=77.17, Def=-5.52
+2024-12-10 01:33:25,932 - INFO - BAL: Off=86.64, Def=-1.72
+2024-12-10 01:33:25,932 - INFO - BUF: Off=82.43, Def=0.92
+2024-12-10 01:33:25,932 - INFO - CAR: Off=65.71, Def=-6.17
+2024-12-10 01:33:25,937 - INFO - Using 2024 data for 32 teams, 2023 data for 0 teams
