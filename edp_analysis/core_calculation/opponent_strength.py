@@ -1,11 +1,14 @@
 """
-Opponent strength adjustment calculations for EDP metrics.
+Strength of Schedule (SoS) Adjustment Module
+
+This module handles all SoS-related calculations and adjustments for EDP metrics.
+It operates independently of the core EDP calculator to maintain separation of concerns.
 """
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Optional
-from .config import OPPONENT_STRENGTH_SETTINGS
+from typing import Dict, Tuple, Optional, List
+from ..data_management.config import SOS_CONFIG
 import logging
 
 class OpponentStrengthAdjuster:
@@ -16,7 +19,7 @@ class OpponentStrengthAdjuster:
         Args:
             settings: Optional dictionary of settings to override defaults
         """
-        self.settings = settings or OPPONENT_STRENGTH_SETTINGS
+        self.settings = settings or SOS_CONFIG
         
     def calculate_opponent_strength_metrics(
         self,

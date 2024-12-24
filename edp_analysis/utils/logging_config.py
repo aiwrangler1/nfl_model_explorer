@@ -1,37 +1,28 @@
 """
-Logging configuration for the NFL EDP analysis codebase.
+Logging Configuration Module
+
+This module provides a standard logging configuration for the EDP analysis package.
 """
 
 import logging
+import sys
 
-def setup_logging(log_level, module_name=None):
-    """
-    Set up logging for a module.
+
+def setup_logging(log_level: int = logging.INFO) -> None:
+    """Set up logging configuration for the package."""
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
     
-    Args:
-        log_level (int): The logging level to use.
-        module_name (str, optional): The name of the module. Defaults to None.
-        
-    Returns:
-        logging.Logger: The configured logger.
-    """
-    logger = logging.getLogger(module_name)
-    logger.setLevel(log_level)
+    # Create formatter
+    formatter = logging.Formatter(
+        '%(levelname)s - %(message)s'
+    )
     
-    console_handler = logging.StreamHandler()
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
-    
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     console_handler.setFormatter(formatter)
     
-    logger.addHandler(console_handler)
-    
-    return logger
-
-if __name__ == "__main__":
-    logger = setup_logging(logging.DEBUG, module_name="test_module")
-    logger.debug("This is a debug message")
-    logger.info("This is an info message")
-    logger.warning("This is a warning message")
-    logger.error("This is an error message")
-    logger.critical("This is a critical message") 
+    # Add handler to root logger
+    root_logger.addHandler(console_handler) 

@@ -1,15 +1,12 @@
-Introducing Earned Drive Points (and our Drive Quality model)
+Earned Drive Points (and a Drive Quality model)
 An alternative metric to EPA for evaluating and predicting NFL team performance
 
 TL;DR
 Drive Quality is an NFL model focused on systematically capturing the efficacy, durability, and reproducibility of drive-level performance, independent of actual scoring outcomes
 
-
 This can yield more accurate explanations of how well a team moved the ball in the past, and in turn, how likely they are to move the ball and score points in the future
 
-
 A metric we are calling "Earned Drive Points", an output from Drive Quality, outperforms EPA in capturing drive-level efficiency and stability
-
 
 EDP has promising backtested (and real-world) results and can potentially offer new predictive insights into short-term and season-over-season team performance
 
@@ -31,9 +28,7 @@ The use of EPA is ubiquitous across NFL fan, betting, DFS, and academic circles.
 The EP/EPA framework assesses performance of all teams (be it the elite Bills or the lowly Bears) using a uniform baseline standard. This can be a useful framework, but it perhaps distorts the meaning of “expected points.”  Let us look at a real-world example of the NFLfastR EP model for teams on the first play of their drives in the 1st quarter of their 2022 games:
 
 
-
 NFLfastR's Expected Points modeled probability of scoring on an NFL team's first drive in 2022
-
 
 OK, let’s break down what we’re looking at here. In the chart above, we see a near perfect linear relationship (R value .92) between starting field position and expected points (gray line) with almost no relationship between expected points and team strength (however defined). Field position matters, of course, but we wouldn’t expect the 2022 Bucs and 2022 Chiefs to have the same scoring expectations when starting with the same field position.  If we want to truly capture a team's expected points, perhaps we should consider a team's known strengths, weaknesses, and tendencies, filtered through the lens of specific matchups and game situations. 
 
@@ -43,14 +38,10 @@ Let’s use some examples to illustrate potential issues here. Team A starts on 
 
 The thesis behind Drive Quality is simple: The method by which a team gains their yards matters, particularly in relation to the plays that precede and follow. In the volatile arena of football, focusing on the process of drives rather than their sometimes-arbitrary outcomes can yield more accurate explanations of how well a team moved the ball in the past, and in turn, how likely they are to move the ball and score points in the future. 
 
-
-
-
 Modeling EDP
 Now that we’ve set the stage, let's delve into the mechanics of modeling EDP. Like EP, we start by creating a custom score expectation for each play, engineered by training an XGBoost model on two decades of NFL data. This model contains the same situational factors as the EP model, but crucially, it also includes variables folding in team strength (offensive and defensive)— through rolling long and short-term efficiency metrics such as yards per play, success, explosive plays, sack rate, etc.— and factoring specific game-state situations. For example, the probability of the Eagles or Bengals (prolific offenses that can succeed passing even in obvious passing situations) to convert on third and long or to mount a comeback when down by 14 in the 4th quarter is not the same as the Texans or Falcons.
 
 Now, let's visualize this. We’ll examine the same chart from before, but this time through the lens of Drive Quality's scoring expectations:
-
 
 
 Drive Quality modeled probability of scoring on an NFL team's first drive in 2022
