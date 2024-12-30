@@ -1,27 +1,48 @@
 """
-Data processing pipeline for the NFL EDP analysis.
+Data Processing Pipeline for NFL EDP Analysis
+
+This module implements a robust data processing pipeline for NFL play-by-play data,
+including validation, transformation, and quality checks at each step.
+
+The pipeline follows these steps:
+1. Load raw play-by-play data
+2. Validate data completeness and structure
+3. Clean and standardize team names
+4. Validate numerical ranges and scoring data
+5. Calculate drive and game metrics
+6. Perform final quality checks
+
+Each step includes detailed logging and error handling to ensure data quality.
 """
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import pandas as pd
 import nfl_data_py as nfl
 import traceback
 import os
 import logging
 from datetime import datetime
-from utils.logging_config import setup_logging
-from utils.data_validation import DataValidator
-from utils.data_processing import standardize_team_names, calculate_drive_metrics, calculate_game_metrics
+from pathlib import Path
+
+from ..utils.logging_config import setup_logging
+from ..utils.data_validation import DataValidator
+from ..utils.data_processing import standardize_team_names, calculate_drive_metrics, calculate_game_metrics
+from .config import DATA_CONFIG, PROJECT_ROOT
+
 
 class NFLDataPipeline:
     """
     Data processing pipeline for NFL data.
     
+    This pipeline handles the entire process of loading, validating, and transforming
+    NFL play-by-play data for EDP analysis. It includes robust error handling and
+    detailed logging at each step.
+    
     Attributes:
-        seasons (List[int]): List of seasons to process.
-        logger (logging.Logger): Logger for the pipeline.
-        validator (DataValidator): Data validator for the pipeline.
-        team_name_map (Dict[str, str]): Mapping of non-standard to standard team names.
+        seasons (List[int]): List of seasons to process
+        logger (logging.Logger): Logger for the pipeline
+        validator (DataValidator): Data validator instance
+        output_dir (Path): Directory for pipeline outputs
     """
     
     def __init__(self, seasons: List[int], log_level: int = logging.INFO) -> None:
@@ -29,49 +50,37 @@ class NFLDataPipeline:
         Initialize the NFL data pipeline.
         
         Args:
-            seasons (List[int]): List of seasons to process.
-            log_level (int): Logging level for the pipeline. Defaults to logging.INFO.
+            seasons: List of seasons to process
+            log_level: Logging level (default: logging.INFO)
         """
         self.seasons = seasons
         self.logger = setup_logging(log_level, module_name=__name__)
         self.validator = DataValidator()
-        self.team_name_map = {
-            'JAX': 'JAC', 'LA': 'LAR', 'LV': 'LAS', 'SD': 'LAC',
-            'STL': 'LAR', 'OAK': 'LAS', 'JAG': 'JAC'
-        }
+        self.output_dir = PROJECT_ROOT / 'pipeline_outputs'
+        self.output_dir.mkdir(exist_ok=True)
         
     def load_raw_data(self) -> pd.DataFrame:
         """
         Load raw play-by-play data from nfl_data_py.
         
         Returns:
-            pd.DataFrame: Raw play-by-play data with standardized team names.
+            DataFrame with raw play-by-play data
             
         Raises:
-            ValueError: If play-by-play data validation fails.
-            Exception: If there's an error loading the data.
+            ValueError: If play-by-play data validation fails
+            Exception: For other loading errors
         """
         try:
             # Load play by play data
+            self.logger.info(f"Loading play-by-play data for seasons: {self.seasons}")
             pbp_df = nfl.import_pbp_data(years=self.seasons)
-            
-            # Define required columns and columns where nulls are allowed
-            required_cols = [
-                'play_id', 'game_id', 'week', 'season',
-                'home_team', 'away_team', 'posteam', 'defteam',
-                'game_date', 'quarter_seconds_remaining', 
-                'half_seconds_remaining', 'game_seconds_remaining',
-                'desc', 'play_type', 'yards_gained'
-            ]
-            
-            null_allowed_cols = [
-                'timeout', 'challenge', 'penalty', 'penalty_yards',
-                'fumble', 'fumble_recovery', 'safety', 'touchdown'
-            ]
             
             # Validate dataset completeness
             is_valid, validation_results = self.validator.validate_dataset_completeness(
-                pbp_df, required_cols, "play_by_play", null_allowed_cols
+                pbp_df, 
+                list(DATA_CONFIG.REQUIRED_COLUMNS), 
+                "play_by_play",
+                list(DATA_CONFIG.NULLABLE_COLUMNS)
             )
             
             if not is_valid:
@@ -79,20 +88,24 @@ class NFLDataPipeline:
                 self.logger.error(f"Validation results: {validation_results}")
                 
                 # Filter out rows with missing required data
-                for col in required_cols:
-                    if col not in null_allowed_cols:
+                for col in DATA_CONFIG.REQUIRED_COLUMNS:
+                    if col not in DATA_CONFIG.NULLABLE_COLUMNS:
                         pbp_df = pbp_df.dropna(subset=[col])
                 
                 self.logger.info(f"Filtered dataset to {len(pbp_df)} valid rows")
             
             # Validate team names
             team_cols = ['home_team', 'away_team', 'posteam', 'defteam']
-            is_valid, invalid_teams = self.validator.validate_team_names(pbp_df, team_cols)
+            is_valid, invalid_teams = self.validator.validate_team_names(
+                pbp_df, 
+                team_cols,
+                DATA_CONFIG.TEAM_NAME_MAP.keys()
+            )
             
             if not is_valid:
                 self.logger.warning(f"Found invalid team names: {invalid_teams}")
                 # Standardize team names
-                pbp_df = standardize_team_names(pbp_df, team_cols, self.team_name_map)
+                pbp_df = standardize_team_names(pbp_df, team_cols, DATA_CONFIG.TEAM_NAME_MAP)
             
             self.logger.info(f"Loaded pbp data: {len(pbp_df)} rows")
             return pbp_df
@@ -102,65 +115,116 @@ class NFLDataPipeline:
             self.logger.error(f"Traceback: {traceback.format_exc()}")
             raise
             
-    def validate_scoring(self, df: pd.DataFrame) -> pd.DataFrame:
+    def validate_numerical_data(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
         """
-        Validate scoring data in the play-by-play dataframe.
+        Validate all numerical data in the dataframe.
         
         Args:
-            df (pd.DataFrame): Play-by-play dataframe.
+            df: Play-by-play dataframe
             
         Returns:
-            pd.DataFrame: Validated play-by-play dataframe.
-            
-        Note:
-            Will filter out rows with invalid score differentials.
-            Warns if invalid score differentials are found.
+            Tuple of (filtered DataFrame, validation results dictionary)
         """
         try:
-            # Validate score differential ranges
+            # Validate all numeric ranges from config
             is_valid, validation_results = self.validator.validate_numerical_ranges(
                 df, 
-                {
-                    'score_differential': (-100, 100),
-                    'yards_gained': (-50, 100),
-                    'play_clock': (0, 40)
-                }
+                DATA_CONFIG.NUMERIC_RANGES
             )
             
             if not is_valid:
                 self.logger.warning("Found invalid numerical values")
                 self.logger.warning(f"Validation results: {validation_results}")
                 
-                # Filter out rows with invalid score differentials
-                df = df[
-                    (df['score_differential'].between(-100, 100)) &
-                    (df['yards_gained'].between(-50, 100)) &
-                    ((df['play_clock'].between(0, 40)) | df['play_clock'].isnull())
-                ]
+                # Filter out rows with invalid values
+                for col, (min_val, max_val) in DATA_CONFIG.NUMERIC_RANGES.items():
+                    if col in df.columns:
+                        df = df[
+                            df[col].between(min_val, max_val) | 
+                            df[col].isnull()
+                        ]
                 
                 self.logger.info(f"Filtered to {len(df)} rows with valid numerical values")
-                
-            return df
+            
+            return df, validation_results
                 
         except Exception as e:
-            self.logger.error(f"Error validating scoring: {str(e)}")
+            self.logger.error(f"Error validating numerical data: {str(e)}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
-            return pd.DataFrame()
+            return pd.DataFrame(), {}
+    
+    def validate_data_volume(self, df: pd.DataFrame) -> bool:
+        """
+        Validate data volume meets expectations.
+        
+        Args:
+            df: Play-by-play dataframe
             
+        Returns:
+            bool indicating if volume checks passed
+        """
+        try:
+            # Check games per season
+            games_per_season = df.groupby('season')['game_id'].nunique()
+            volume_valid = True
+            
+            for season, count in games_per_season.items():
+                if count < DATA_CONFIG.EXPECTED_GAMES_PER_SEASON:
+                    self.logger.warning(
+                        f"Season {season} has fewer games than expected: "
+                        f"{count} vs {DATA_CONFIG.EXPECTED_GAMES_PER_SEASON}"
+                    )
+                    volume_valid = False
+            
+            # Check plays per game
+            plays_per_game = df.groupby('game_id').size()
+            invalid_games = plays_per_game[
+                ~plays_per_game.between(
+                    DATA_CONFIG.MIN_PLAYS_PER_GAME,
+                    DATA_CONFIG.MAX_PLAYS_PER_GAME
+                )
+            ]
+            
+            if not invalid_games.empty:
+                self.logger.warning(
+                    f"Found {len(invalid_games)} games with suspicious play counts"
+                )
+                volume_valid = False
+            
+            return volume_valid
+            
+        except Exception as e:
+            self.logger.error(f"Error validating data volume: {str(e)}")
+            return False
+    
+    def save_pipeline_outputs(self, df: pd.DataFrame, validation_results: Dict) -> None:
+        """Save pipeline outputs and validation results."""
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # Save processed data
+        output_path = self.output_dir / f'processed_pbp_{timestamp}.parquet'
+        df.to_parquet(output_path)
+        
+        # Save validation report
+        report_path = self.output_dir / f'validation_report_{timestamp}.txt'
+        with open(report_path, 'w') as f:
+            f.write(f"NFL Data Pipeline Validation Report\n")
+            f.write(f"Generated: {datetime.now()}\n\n")
+            f.write(f"Seasons processed: {self.seasons}\n")
+            f.write(f"Final row count: {len(df)}\n\n")
+            f.write("Validation Results:\n")
+            for key, value in validation_results.items():
+                f.write(f"{key}:\n{value}\n\n")
+    
     def run_pipeline(self) -> pd.DataFrame:
         """
         Run the full NFL data processing pipeline.
         
         Returns:
-            pd.DataFrame: Processed play-by-play dataframe with drive metrics.
+            Processed play-by-play DataFrame with drive metrics
             
         Note:
-            Returns empty DataFrame if any step fails.
-            Steps include:
-            1. Loading raw data
-            2. Validating scoring
-            3. Calculating drive metrics
-            
+            Returns empty DataFrame if any critical step fails.
             Invalid rows are filtered out rather than failing the entire pipeline.
         """
         try:
@@ -170,15 +234,22 @@ class NFLDataPipeline:
                 self.logger.error("Failed to load raw data")
                 return pd.DataFrame()
             
-            # Validate scoring
-            df = self.validate_scoring(df)
+            # Validate numerical data
+            df, validation_results = self.validate_numerical_data(df)
             if df.empty:
-                self.logger.error("Scoring validation failed")
+                self.logger.error("Numerical validation failed")
                 return pd.DataFrame()
             
-            # Calculate drive metrics
+            # Validate data volume
+            if not self.validate_data_volume(df):
+                self.logger.warning("Data volume validation failed")
+            
+            # Calculate metrics
             drive_metrics = calculate_drive_metrics(df)
             df = pd.merge(df, drive_metrics, on=['game_id', 'drive'], how='left')
+            
+            # Save outputs
+            self.save_pipeline_outputs(df, validation_results)
             
             self.logger.info(f"Pipeline completed successfully with {len(df)} rows")
             return df

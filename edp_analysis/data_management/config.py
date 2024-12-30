@@ -6,7 +6,12 @@ This module contains configuration constants and settings for the EDP analysis p
 
 from typing import Dict, Set, List
 from dataclasses import dataclass, field
+from pathlib import Path
 
+# Project paths
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+DATA_DIR = PROJECT_ROOT / 'data'
+MODEL_OUTPUTS_DIR = PROJECT_ROOT / 'model_outputs'
 
 @dataclass
 class DataConfig:
@@ -87,11 +92,15 @@ class DataConfig:
         'epa': (-15, 15)
     })
 
+    # File patterns and formats
+    DATA_FILE_PATTERN: str = "pbp_*.parquet"
+    CACHE_FILE_PATTERN: str = "processed_pbp_*.parquet"
+
 
 @dataclass
 class EDPConfig:
     """Configuration for EDP calculations."""
-    # Component weights
+    # Component weights for drive quality
     PROB_POINTS_WEIGHT: float = 0.45
     VOLATILITY_WEIGHT: float = 0.225
     FIELD_POS_WEIGHT: float = 0.225
@@ -113,9 +122,8 @@ class EDPConfig:
     MIN_PLAYS_PER_DRIVE: int = 1
     MAX_PLAYS_PER_DRIVE: int = 30
     
-    # Team weights for total EDP
-    OFFENSE_WEIGHT: float = 0.6
-    DEFENSE_WEIGHT: float = 0.4
+    # Minimum drives for rankings
+    MIN_DRIVES_FOR_RANKING: int = 20
 
 
 @dataclass
@@ -129,9 +137,8 @@ class SoSConfig:
     
     # Component weights
     WEIGHTS: Dict[str, float] = field(default_factory=lambda: {
-        'offensive_edp': 0.4,
-        'defensive_edp': 0.4,
-        'special_teams': 0.2
+        'offensive_edp': 0.5,
+        'defensive_edp': 0.5
     })
     
     # Maximum adjustment factor (+/- 20%)
@@ -162,6 +169,11 @@ class OutputConfig:
         'offensive_edp',
         'defensive_edp'
     ])
+    
+    # Visualization settings
+    PLOT_DPI: int = 300
+    PLOT_FIGSIZE: tuple = (12, 8)
+    PLOT_STYLE: str = "whitegrid"
 
 
 # Global configuration instances

@@ -1,0 +1,78 @@
+2024-12-24 04:39:51,037 - edp_analysis.data_loader - INFO - Loading play-by-play data for seasons: [2024]
+2024-12-24 04:39:53,071 - edp_analysis.data_loader - INFO - Loaded 41724 plays
+2024-12-24 04:39:53,071 - edp_analysis.data_loader - INFO - Caching data to /Users/juice_andy/Coding & Data Projects/NFL Data Projects/nfl-2024-edp-model-exploration/data/cache/pbp_s2024.parquet
+2024-12-24 04:39:53,724 - edp_analysis.data_loader - INFO - Standardizing team names
+2024-12-24 04:39:54,117 - edp_analysis.data_loader - WARNING - Found invalid offensive team names: {None, 'LA'}
+2024-12-24 04:39:54,118 - edp_analysis.data_loader - WARNING - Found invalid defensive team names: {None, 'LA'}
+2024-12-24 04:39:54,118 - edp_analysis.data_loader - INFO - Filtering to valid play types
+2024-12-24 04:39:54,346 - edp_analysis.data_loader - INFO - Retained 40495 valid plays
+2024-12-24 04:39:54,369 - edp_analysis.data_loader - WARNING - Found null values in critical columns:
+2024-12-24 04:39:54,369 - edp_analysis.data_loader - WARNING -   posteam: 1805 nulls
+2024-12-24 04:39:54,369 - edp_analysis.data_loader - WARNING -   defteam: 1805 nulls
+2024-12-24 04:39:54,369 - edp_analysis.data_loader - WARNING -   down: 5521 nulls
+2024-12-24 04:39:54,370 - edp_analysis.data_loader - WARNING -   drive: 92 nulls
+2024-12-24 04:39:54,370 - edp_analysis.data_loader - WARNING -   yardline_100: 1786 nulls
+2024-12-24 04:39:54,373 - edp_analysis.data_loader - WARNING - Season 2024 has fewer games than expected: 240 vs 544
+2024-12-24 04:39:54,375 - edp_analysis.data_loader - WARNING - Found 1 games with suspiciously many plays:
+2024-12-24 04:39:54,375 - edp_analysis.data_loader - WARNING -   2024_13_TB_CAR: 205 plays
+2024-12-24 04:39:54,376 - edp_analysis.data_loader - WARNING - Found 54 values outside expected range for yards_gained (-99, 100)
+2024-12-24 04:39:54,384 - edp_analysis.data_loader - WARNING - Found 1786 values outside expected range for yardline_100 (1, 99)
+2024-12-24 04:39:54,400 - edp_analysis.data_loader - WARNING - Found 5521 values outside expected range for down (1, 4)
+2024-12-24 04:39:54,407 - edp_analysis.data_loader - INFO - Data loading and preparation completed successfully
+2024-12-24 04:40:42,794 - edp_analysis.data_loader - INFO - Loading cached data from /Users/juice_andy/Coding & Data Projects/NFL Data Projects/nfl-2024-edp-model-exploration/data/cache/pbp_s2024.parquet
+2024-12-24 04:40:42,948 - edp_analysis.data_loader - INFO - Standardizing team names
+2024-12-24 04:40:43,336 - edp_analysis.data_loader - WARNING - Found invalid offensive team names: {None, 'LA'}
+2024-12-24 04:40:43,337 - edp_analysis.data_loader - WARNING - Found invalid defensive team names: {None, 'LA'}
+2024-12-24 04:40:43,337 - edp_analysis.data_loader - INFO - Filtering to valid play types
+2024-12-24 04:40:43,576 - edp_analysis.data_loader - INFO - Retained 40495 valid plays
+2024-12-24 04:40:43,597 - edp_analysis.data_loader - WARNING - Found null values in critical columns:
+2024-12-24 04:40:43,597 - edp_analysis.data_loader - WARNING -   defteam: 1805 nulls
+2024-12-24 04:40:43,597 - edp_analysis.data_loader - WARNING -   yardline_100: 1786 nulls
+2024-12-24 04:40:43,597 - edp_analysis.data_loader - WARNING -   drive: 92 nulls
+2024-12-24 04:40:43,597 - edp_analysis.data_loader - WARNING -   down: 5521 nulls
+2024-12-24 04:40:43,597 - edp_analysis.data_loader - WARNING -   posteam: 1805 nulls
+2024-12-24 04:40:43,599 - edp_analysis.data_loader - WARNING - Season 2024 has fewer games than expected: 240 vs 544
+2024-12-24 04:40:43,602 - edp_analysis.data_loader - WARNING - Found 1 games with suspiciously many plays:
+2024-12-24 04:40:43,602 - edp_analysis.data_loader - WARNING -   2024_13_TB_CAR: 205 plays
+2024-12-24 04:40:43,603 - edp_analysis.data_loader - WARNING - Found 54 values outside expected range for yards_gained (-99, 100)
+2024-12-24 04:40:43,610 - edp_analysis.data_loader - WARNING - Found 1786 values outside expected range for yardline_100 (1, 99)
+2024-12-24 04:40:43,627 - edp_analysis.data_loader - WARNING - Found 5521 values outside expected range for down (1, 4)
+2024-12-24 04:40:43,633 - edp_analysis.data_loader - INFO - Data loading and preparation completed successfully
+2024-12-24 04:42:13,502 - edp_analysis.data_loader - INFO - Loading cached data from /Users/juice_andy/Coding & Data Projects/NFL Data Projects/nfl-2024-edp-model-exploration/data/cache/pbp_s2024.parquet
+2024-12-24 04:42:13,657 - edp_analysis.data_loader - INFO - Standardizing team names
+2024-12-24 04:42:14,043 - edp_analysis.data_loader - WARNING - Found invalid offensive team names: {'LA', None}
+2024-12-24 04:42:14,044 - edp_analysis.data_loader - WARNING - Found invalid defensive team names: {'LA', None}
+2024-12-24 04:42:14,044 - edp_analysis.data_loader - INFO - Filtering to valid play types
+2024-12-24 04:42:14,283 - edp_analysis.data_loader - INFO - Retained 40495 valid plays
+2024-12-24 04:42:14,304 - edp_analysis.data_loader - WARNING - Found null values in critical columns:
+2024-12-24 04:42:14,304 - edp_analysis.data_loader - WARNING -   yardline_100: 1786 nulls
+2024-12-24 04:42:14,304 - edp_analysis.data_loader - WARNING -   drive: 92 nulls
+2024-12-24 04:42:14,304 - edp_analysis.data_loader - WARNING -   down: 5521 nulls
+2024-12-24 04:42:14,304 - edp_analysis.data_loader - WARNING -   defteam: 1805 nulls
+2024-12-24 04:42:14,304 - edp_analysis.data_loader - WARNING -   posteam: 1805 nulls
+2024-12-24 04:42:14,306 - edp_analysis.data_loader - WARNING - Season 2024 has fewer games than expected: 240 vs 544
+2024-12-24 04:42:14,309 - edp_analysis.data_loader - WARNING - Found 1 games with suspiciously many plays:
+2024-12-24 04:42:14,309 - edp_analysis.data_loader - WARNING -   2024_13_TB_CAR: 205 plays
+2024-12-24 04:42:14,310 - edp_analysis.data_loader - WARNING - Found 54 values outside expected range for yards_gained (-99, 100)
+2024-12-24 04:42:14,317 - edp_analysis.data_loader - WARNING - Found 1786 values outside expected range for yardline_100 (1, 99)
+2024-12-24 04:42:14,334 - edp_analysis.data_loader - WARNING - Found 5521 values outside expected range for down (1, 4)
+2024-12-24 04:42:14,340 - edp_analysis.data_loader - INFO - Data loading and preparation completed successfully
+2024-12-24 04:43:42,988 - edp_analysis.data_loader - INFO - Loading cached data from /Users/juice_andy/Coding & Data Projects/NFL Data Projects/nfl-2024-edp-model-exploration/data/cache/pbp_s2024.parquet
+2024-12-24 04:43:43,144 - edp_analysis.data_loader - INFO - Standardizing team names
+2024-12-24 04:43:43,530 - edp_analysis.data_loader - WARNING - Found invalid offensive team names: {None, 'LA'}
+2024-12-24 04:43:43,531 - edp_analysis.data_loader - WARNING - Found invalid defensive team names: {None, 'LA'}
+2024-12-24 04:43:43,531 - edp_analysis.data_loader - INFO - Filtering to valid play types
+2024-12-24 04:43:43,767 - edp_analysis.data_loader - INFO - Retained 40495 valid plays
+2024-12-24 04:43:43,788 - edp_analysis.data_loader - WARNING - Found null values in critical columns:
+2024-12-24 04:43:43,788 - edp_analysis.data_loader - WARNING -   yardline_100: 1786 nulls
+2024-12-24 04:43:43,788 - edp_analysis.data_loader - WARNING -   posteam: 1805 nulls
+2024-12-24 04:43:43,788 - edp_analysis.data_loader - WARNING -   down: 5521 nulls
+2024-12-24 04:43:43,788 - edp_analysis.data_loader - WARNING -   defteam: 1805 nulls
+2024-12-24 04:43:43,788 - edp_analysis.data_loader - WARNING -   drive: 92 nulls
+2024-12-24 04:43:43,791 - edp_analysis.data_loader - WARNING - Season 2024 has fewer games than expected: 240 vs 544
+2024-12-24 04:43:43,793 - edp_analysis.data_loader - WARNING - Found 1 games with suspiciously many plays:
+2024-12-24 04:43:43,793 - edp_analysis.data_loader - WARNING -   2024_13_TB_CAR: 205 plays
+2024-12-24 04:43:43,794 - edp_analysis.data_loader - WARNING - Found 54 values outside expected range for yards_gained (-99, 100)
+2024-12-24 04:43:43,802 - edp_analysis.data_loader - WARNING - Found 1786 values outside expected range for yardline_100 (1, 99)
+2024-12-24 04:43:43,819 - edp_analysis.data_loader - WARNING - Found 5521 values outside expected range for down (1, 4)
+2024-12-24 04:43:43,825 - edp_analysis.data_loader - INFO - Data loading and preparation completed successfully

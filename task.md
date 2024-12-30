@@ -1,5 +1,11 @@
 # EDP Model Development Status
 
+## Important Notes
+- Defensive EDP Interpretation: Negative values indicate better defense (points prevented per drive)
+  - Example: -2.0 defensive EDP means the defense prevents 2 points per drive on average
+  - In visualizations, negative defensive EDP should appear at the top of the y-axis
+  - When combining offensive and defensive metrics, subtract defensive EDP (don't add)
+
 ## Project Structure
 ```
 edp_analysis/
@@ -13,12 +19,17 @@ edp_analysis/
 │   └── data_pipeline.py       # Data processing pipeline
 │
 ├── Analysis Interface/
-│   └── edp_rankings.py        # Rankings generation & Excel output
+│   ├── edp_rankings.py        # Rankings generation & Excel output
+│   └── edp_visualizer.py      # Visualization of EDP metrics
 │
 ├── utils/
 │   ├── data_validation.py     # Data validation utilities
 │   ├── data_processing.py     # Data processing utilities
 │   └── logging_config.py      # Logging configuration
+│
+├── docs/
+│   ├── data_requirements.md   # Data specifications and requirements
+│   └── performance.md         # Performance optimization guide
 │
 └── tests/
     ├── test_edp_calculator_v2.py
@@ -26,8 +37,9 @@ edp_analysis/
     └── test_pipeline.py
 
 Supporting Directories:
-model_outputs/   # Excel outputs from rankings
+model_outputs/   # Excel outputs and visualizations
 data/           # Raw data storage
+logs/           # Application and performance logs
 ```
 
 ## Component Status
@@ -36,34 +48,46 @@ data/           # Raw data storage
 - `edp_calculator_v2.py`: Implemented and tested
   - Drive quality metrics
   - Team-level aggregation
-  - Base EDP calculations
+  - Base EDP calculations (unweighted)
 
 - `opponent_strength.py`: Implemented and tested
   - SoS adjustments
   - Team strength metrics
   - Integration with EDP calculator
 
-### Data Management ⚠️
-- `config.py`: Needs update
-  - Consolidate configuration settings
-  - Add missing constants
-  - Document all settings
+### Data Management ✓
+- `config.py`: Updated ✓
+  - Added project paths and constants
+  - Removed weighted calculations
+  - Added visualization settings
+  - Added file patterns and formats
 
-- `data_loader.py`: Needs update
-  - Update validation logic
-  - Improve error handling
-  - Add logging
+- `data_loader.py`: Updated ✓
+  - Enhanced logging with file and console output
+  - Added data caching with parquet files
+  - Added volume and range validations
+  - Improved error handling and reporting
 
-- `data_pipeline.py`: Needs review
-  - Verify transformations
-  - Add data quality checks
-  - Document pipeline steps
+- `data_pipeline.py`: Updated ✓
+  - Added comprehensive documentation
+  - Enhanced validation checks
+  - Added data volume validation
+  - Added validation reporting
+  - Improved error handling
+  - Added pipeline output saving
 
-### Analysis Interface ⚠️
-- `edp_rankings.py`: Needs update
-  - Update to work with v2 calculator
-  - Add SoS integration
-  - Improve output formatting
+### Analysis Interface ✓
+- `edp_rankings.py`: Updated
+  - Unweighted EDP calculations (total = offensive - defensive)
+  - SoS integration
+  - Excel output with weekly and season rankings
+
+- `edp_visualizer.py`: Implemented
+  - Offensive vs Defensive EDP scatter plots
+    - X-axis: Offensive EDP (higher is better)
+    - Y-axis: Defensive EDP (lower/more negative is better)
+  - Automated latest file detection
+  - High-quality PNG output
 
 ### Utils ✓
 - `data_validation.py`: Implemented
@@ -87,32 +111,49 @@ data/           # Raw data storage
 - Add performance tests
 - Improve test coverage
 
+## Recent Changes
+- Removed 60/40 weighting from total EDP calculations
+- Added visualization component for offensive vs defensive EDP
+- Updated project structure documentation
+- Updated config.py with consolidated settings and new constants
+- Fixed defensive EDP visualization (negative values at top)
+- Enhanced data_loader.py with caching and validations
+- Improved data_pipeline.py with better validation and reporting
+- Added comprehensive documentation:
+  - Data requirements specification
+  - Performance optimization guide
+  - Memory usage considerations
+  - Processing benchmarks
+- Enhanced rankings calculation:
+  - Added proper SoS adjustments integration
+  - Implemented recency weighting (10% increase per week)
+  - Fixed defensive EDP interpretation in calculations
+
 ## Next Steps
 
-### 1. Data Management Updates
-- [ ] Update config.py with consolidated settings
-- [ ] Improve data_loader.py validation and logging
-- [ ] Review and document data_pipeline.py
+### 1. Rankings Optimization
+- [x] Make sure SoS is being applied correctly to rankings
+- [x] Add recency weighting to rankings
+- [ ] Add confidence intervals to rankings
+- [ ] Add trend indicators (up/down arrows)
 
-### 2. Analysis Interface
-- [ ] Update edp_rankings.py for v2 compatibility
-- [ ] Add SoS integration
-- [ ] Improve output formatting
+### 2. Visualization Enhancements
+- [ ] Create time series visualizations
+- [ ] Add trend lines to scatter plots
+- [ ] Add interactive plotting options
+- [ ] Export plots in multiple formats
 
-### 3. Testing
-- [ ] Update test suite for new structure
-- [ ] Add integration tests
-- [ ] Add performance tests
-- [ ] Improve coverage
+### 3. Future Features
+- [ ] Add database integration for historical data
+- [ ] Implement FTN data from NFLdatapy
+- [ ] Add advanced visualization options:
+  - [ ] Team comparison tool
+  - [ ] Drive success heat maps
+  - [ ] Performance trend analysis
+  - [ ] Strength of schedule impact visualization
 
-### 4. Documentation
-- [ ] Add docstrings to all functions
-- [ ] Create usage examples
-- [ ] Document data requirements
-- [ ] Add performance considerations
-
-### 5. Quality Assurance
-- [ ] Run full test suite
-- [ ] Verify all imports work
-- [ ] Check logging output
-- [ ] Test with real data
+### 4. Testing and Validation
+- [ ] Add tests for SoS calculations
+- [ ] Validate recency weighting impact
+- [ ] Test ranking stability week-over-week
+- [ ] Add performance benchmarking
