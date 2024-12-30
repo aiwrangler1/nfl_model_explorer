@@ -5,8 +5,8 @@ Unit tests for EDPCalculator V2.
 import unittest
 import pandas as pd
 import numpy as np
-from .edp_calculator_v2 import EDPCalculator, EDPWeights
-from .data_pipeline import NFLDataPipeline
+from analysis.edp_calculation.edp_calculator_v2 import EDPCalculator, EDPWeights
+from processing.pbp.pipeline import NFLDataPipeline
 
 
 class TestEDPCalculatorV2(unittest.TestCase):

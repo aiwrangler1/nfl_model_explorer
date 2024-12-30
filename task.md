@@ -8,33 +8,66 @@
 
 ## Project Structure
 ```
-edp_analysis/
-├── Core Calculation/
-│   ├── edp_calculator_v2.py    # Core EDP calculation engine
-│   └── opponent_strength.py    # Strength of schedule adjustments
+nfl-2024-edp-model-exploration/
+├── data/
+│   ├── pbp/
+│   │   ├── raw/
+│   │   ├── processed/
+│   │   └── validation/
+│   ├── ftn/
+│   │   ├── raw/
+│   │   ├── processed/
+│   │   └── validation/
+│   ├── weather/
+│   │   ├── raw/
+│   │   ├── processed/
+│   │   └── validation/
+│   ├── injury/
+│   │   ├── raw/
+│   │   ├── processed/
+│   │   └── validation/
+│   └── metadata/
 │
-├── Data Management/
-│   ├── config.py              # Configuration and constants
-│   ├── data_loader.py         # NFL play-by-play data loading
-│   └── data_pipeline.py       # Data processing pipeline
+├── processing/
+│   ├── pbp/
+│   │   └── pipeline.py
+│   ├── ftn/
+│   │   └── process_ftn.py
+│   ├── weather/
+│   │   └── process_weather.py
+│   ├── injury/
+│   │   └── process_injury.py
+│   └── core/
+│       ├── config.py
+│       └── drive_calculations.py
 │
-├── Analysis Interface/
-│   ├── edp_rankings.py        # Rankings generation & Excel output
-│   └── edp_visualizer.py      # Visualization of EDP metrics
+├── analysis/
+│   ├── edp_calculation/
+│   │   ├── edp_calculator_v2.py
+│   │   └── opponent_strength.py
+│   ├── rankings/
+│   │   └── edp_rankings.py
+│   └── visualization/
+│       └── edp_visualizer.py
 │
 ├── utils/
-│   ├── data_validation.py     # Data validation utilities
-│   ├── data_processing.py     # Data processing utilities
-│   └── logging_config.py      # Logging configuration
+│   ├── data_validation.py
+│   └── logging_config.py
+│
+├── tests/
+│   ├── data/
+│   ├── processing/
+│   │   └── test_pipeline.py
+│   └── analysis/
+│       ├── test_edp_calculator_v2.py
+│       └── test_opponent_adjustments.py
 │
 ├── docs/
-│   ├── data_requirements.md   # Data specifications and requirements
-│   └── performance.md         # Performance optimization guide
+│   ├── data_requirements.md
+│   └── performance.md
 │
-└── tests/
-    ├── test_edp_calculator_v2.py
-    ├── test_opponent_adjustments.py
-    └── test_pipeline.py
+├── logs/
+└── model_outputs/
 
 Supporting Directories:
 model_outputs/   # Excel outputs and visualizations

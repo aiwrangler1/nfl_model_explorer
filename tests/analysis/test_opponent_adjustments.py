@@ -5,12 +5,12 @@ Tests for opponent strength adjustments in EDP calculations.
 import pandas as pd
 import numpy as np
 import pytest
-from .opponent_strength import (
+from analysis.edp_calculation.opponent_strength import (
     calculate_opponent_strength_metrics,
     calculate_matchup_adjustments,
     apply_opponent_adjustments
 )
-from .config import OPPONENT_STRENGTH_SETTINGS
+from processing.core.config import OPPONENT_STRENGTH_SETTINGS
 
 @pytest.fixture
 def sample_team_data():
