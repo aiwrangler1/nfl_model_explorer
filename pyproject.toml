@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "edp_analysis"
+version = "0.1.0"
+authors = [
+    { name = "Andy Juice", email = "juice_andy@example.com" },
+]
+description = "NFL Expected Drive Points (EDP) Analysis"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "scikit-learn>=0.24.0",
+    "matplotlib>=3.4.0",
+    "seaborn>=0.11.0",
+    "pymc>=5.0.0",
+    "aesara>=0.1.0",
+    "arviz>=0.11.0",
+    "typing-extensions>=3.10.0",
+    "nfl-data-py>=0.3.0",
+    "openpyxl>=3.0.0",
+]
+
+[tool.setuptools]
+packages = ["edp_analysis", "edp_analysis.analysis_interface", "edp_analysis.core_calculation", "edp_analysis.data_management", "edp_analysis.utils"]
+
+[project.scripts]
+edp-rankings = "edp_analysis.analysis_interface.edp_rankings:main"
